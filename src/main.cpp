@@ -1567,8 +1567,8 @@ SokuLib::Select *__fastcall CSelect_construct(SokuLib::Select *This)
 		dat.cursor->x1 = 700 * i - 50;
 		dat.isInit = true;
 		((void (__thiscall *)(CEffectManager  *))0x422CF0)(&dat.effectMgr);
-		profileInfo.palette = 0;
-		profileInfo.deck = 0;
+		dat.palHandler.pos = profileInfo.palette;
+		dat.deckHandler.pos = profileInfo.deck;
 		// data/scene/select/character/09b_character/character_%02d.bmp
 		sprintf(buffer, (char *)0x85785C, profileInfo.character);
 		if (!SokuLib::textureMgr.loadTexture(&ret, buffer, &size.x, &size.y))
@@ -1950,6 +1950,48 @@ void __fastcall changePalette(SokuLib::Select *This, int index, char palette, bo
 	mine.palette = palette;
 	mine2.pos = palette;
 	mine2.posCopy = palette;
+}
+
+void __declspec(naked) changePalette_hook0()
+{
+	__asm {
+		PUSH EDX
+		MOV EAX, [EDX]
+		MOV ECX, ESI
+		MOV EDX, 1
+		PUSH EDX
+		PUSH EAX
+		MOV EDX, EDI
+		SHR EDX, 5
+		CALL changePalette
+		POP EDX
+		RET
+	}
+}
+
+void __declspec(naked) changePalette_hook1()
+{
+	__asm {
+		PUSH EDX
+		MOV EAX, [EDX]
+		MOV ECX, ESI
+		MOV EDX, [EBX]
+		MOV EDX, [EDX + 0x3C]
+		CMP EDX, 0
+		JGE under
+		XOR EDX, EDX
+		JMP END
+		under:
+		MOV EDX, 1
+		end:
+		PUSH EDX
+		PUSH EAX
+		MOV EDX, EDI
+		SHR EDX, 5
+		CALL changePalette
+		POP EDX
+		RET
+	}
 }
 
 int updateCharacterSelect_hook_failAddr = 0x42091D;
@@ -3418,6 +3460,11 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	SokuLib::TamperNearJmp(0x4208ED, updateCharacterSelect_hook);
 	*(char *)0x4208F2 = 0x90;
 	*(char *)0x4208F3 = 0x90;
+
+	memset((void *)0x42081E, 0x90, 0x42085F - 0x42081E);
+	SokuLib::TamperNearCall(0x420849, changePalette_hook0);
+	memset((void *)0x4206DC, 0x90, 0x42072D - 0x4206DC);
+	SokuLib::TamperNearCall(0x4206DC, changePalette_hook1);
 
 	memset((void *)0x46012A, 0x90, 13);
 	memset((void *)0x4622A4, 0x90, 13);
