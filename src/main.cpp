@@ -2,6 +2,8 @@
 // Created by Gegel85 on 31/10/2020
 //
 
+#define _USE_MATH_DEFINES
+
 #include <fstream>
 #include <sstream>
 #include <optional>
@@ -250,6 +252,7 @@ static bool init = false;
 static bool disp = false;
 static bool anim = false;
 static HMODULE myModule;
+static SokuLib::DrawUtils::Sprite healingCircle[2];
 static SokuLib::DrawUtils::Sprite cursors[4];
 static bool assetsLoaded = false;
 static CInfoManager hud2;
@@ -357,6 +360,11 @@ static std::pair<SokuLib::PlayerInfo, SokuLib::PlayerInfo> assists = {
 	SokuLib::PlayerInfo{SokuLib::CHARACTER_CIRNO, 0, 0, 0, 0, {}, &keys.first},
 	SokuLib::PlayerInfo{SokuLib::CHARACTER_MARISA, 1, 0, 0, 0, {}, &keys.second}
 };
+static std::pair<int, int> healing{-1, -1};
+
+#define HEALING_TIME 180
+#define HEALTH_PERCENT (15.f / 100.f)
+#define HEAL_RADIUS (100)
 
 void loadSoku2CSV(LPWSTR path)
 {
@@ -664,6 +672,29 @@ static void drawPlayerBoxes(const SokuLib::CharacterManager &manager, bool playe
 
 static int ctr = 0;
 
+static void checkHealing(int i, int &healing)
+{
+	auto hp1 = dataMgr->players[i]->objectBase.hp;
+	auto hp2 = dataMgr->players[i + 2]->objectBase.hp;
+
+	if (hp1 == 0 || hp2 == 0) {
+		auto dead = dataMgr->players[i + (hp2 == 0 ? 2 : 0)];
+		auto pos1 = dataMgr->players[i]->objectBase.position;
+		auto pos2 = dataMgr->players[i + 2]->objectBase.position;
+		auto diffX = pos1.x - pos2.x;
+		auto diffY = pos1.y - pos2.y;
+		auto &hud = hp1 == 0 ? *(CInfoManager *)0x8985E8 : hud2;
+
+		if (diffX * diffX + diffY * diffY <= HEAL_RADIUS * HEAL_RADIUS && strcmp(profiles[i + (hp2 == 0 ? 2 : 0)]->name, "dead"))
+			healing++;
+		(&hud.p1State)[i].lastHp = healing * dead->objectBase.hp / HEALING_TIME;
+		if (healing == HEALING_TIME) {
+			dead->objectBase.hp = *(unsigned short *) &dead->objectBase.offset_0x186 * HEALTH_PERCENT;
+			healing = 0;
+		}
+	}
+}
+
 int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 {
 	auto players = (SokuLib::CharacterManager**)((int)This + 0x0C);
@@ -691,8 +722,14 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 			dataMgr->players[i]->objectBase.offset_0x14E[0] = i;
 		init = true;
 	}
+	for (int i = 0; i < 4; i++)
+		if (dataMgr->players[i]->keyMap.pause == 1)
+			return (This->*s_originalBattleMgrOnProcess)();
+
+	unsigned short hps[4];
 
 	for (int i = 0; i < 4; i++) {
+		hps[i] = dataMgr->players[i]->objectBase.hp;
 		if (strcmp(profiles[i]->name, "dead") != 0)
 			continue;
 		if (dataMgr->players[i]->objectBase.hp > 0) {
@@ -701,9 +738,23 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 			dataMgr->players[i]->objectBase.animate();
 		}
 	}
+	checkHealing(0, healing.first);
+	checkHealing(1, healing.second);
+	healingCircle[0].setRotation(fmod(healingCircle[0].getRotation() + 0.01, M_PI * 2));
+	healingCircle[1].setRotation(-healingCircle[0].getRotation());
 
 	int ret = (This->*s_originalBattleMgrOnProcess)();
 
+	if (This->matchState == 2)
+		for (int i = 0; i < 4; i++) {
+			if (hps[i] != 0 && dataMgr->players[i]->objectBase.hp == 0) {
+				for (int j = (i & 1) ^ 1; j < 4; j += 2)
+					if (dataMgr->players[j]->objectBase.opponent == dataMgr->players[i])
+						dataMgr->players[j]->objectBase.opponent = dataMgr->players[i ^ 2];
+				SokuLib::playSEWaveBuffer(44);
+			}
+			hps[i] = dataMgr->players[i]->objectBase.hp;
+		}
 	if (This->matchState <= 2 || This->matchState == 4) {
 		int i = 0;
 
@@ -734,7 +785,6 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 
 			if (dataMgr->players[i]->objectBase.opponent == dataMgr->players[j])
 				j += 2;
-			printf("Switching %i's opponent to %i\n", i, j);
 			dataMgr->players[i]->objectBase.opponent = dataMgr->players[j];
 		}
 	}
@@ -769,6 +819,10 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 	players[3]->roundLost = players[1]->roundLost;
 	players[2]->kdAnimationFinished = players[0]->kdAnimationFinished;
 	players[3]->kdAnimationFinished = players[1]->kdAnimationFinished;
+	players[0]->score = max(players[0]->score, players[2]->score);
+	players[1]->score = max(players[1]->score, players[3]->score);
+	players[2]->score = max(players[0]->score, players[2]->score);
+	players[3]->score = max(players[1]->score, players[3]->score);
 	return ret;
 }
 
@@ -1287,11 +1341,22 @@ void __stdcall loadDeckData(char *charName, void *csvFile, SokuLib::DeckInfo &de
 				"data/scene/select/character/04c_cursor3p.bmp",
 				"data/scene/select/character/04c_cursor4p.bmp"
 			};
+			const char *healingSprites[] = {
+				"data/character/common/breakEF_in002.bmp",
+				"data/character/common/breakEF_out002.bmp"
+			};
+
 			for (int i = 0; i < 4; i++) {
 				cursors[i].texture.loadFromGame(cursorSprites[i]);
 				cursors[i].setSize(cursors[i].texture.getSize());
 				cursors[i].rect.width = cursors[i].getSize().x;
 				cursors[i].rect.height = cursors[i].getSize().y;
+			}
+			for (int i = 0; i < 2; i++) {
+				healingCircle[i].texture.loadFromGame(healingSprites[i]);
+				healingCircle[i].setSize(healingCircle[i].texture.getSize());
+				healingCircle[i].rect.width = healingCircle[i].getSize().x;
+				healingCircle[i].rect.height = healingCircle[i].getSize().y;
 			}
 		}
 
@@ -1375,6 +1440,7 @@ unsigned char __fastcall checkWakeUp(SokuLib::CharacterManager *This)
 }
 
 static void *og_switchBattleStateBreakAddr;
+unsigned endRoundFct = 0x46B420;
 
 void __declspec(naked) healExtraChrs()
 {
@@ -1385,6 +1451,13 @@ void __declspec(naked) healExtraChrs()
 		MOV EAX, dword ptr [ESI + 0x18]
 		MOV DX, word ptr [EAX + 0x186]
 		MOV word ptr [EAX + 0x184], DX
+		MOV ECX, [ESI + 0x14]
+		CALL [endRoundFct]
+		MOV ECX, [ESI + 0x18]
+		CALL [endRoundFct]
+		XOR ECX, ECX
+		MOV dword ptr [healing], ECX
+		MOV dword ptr [healing + 4], ECX
 		JMP og_switchBattleStateBreakAddr
 	}
 }
@@ -1395,6 +1468,25 @@ const double yPos = 62;
 
 int __fastcall onHudRender(CInfoManager *This)
 {
+	setRenderMode(2);
+	for (int i = 0; i < 2; i++) {
+		auto &h = (&healing.first)[i];
+
+		for (auto &circle: healingCircle) {
+			auto pos = dataMgr->players[(dataMgr->players[i]->objectBase.hp == 0 ? 0 : 2) + i]->objectBase.position;
+
+			circle.setSize({
+				circle.rect.width * h / (unsigned) HEALING_TIME,
+				circle.rect.height * h / (unsigned) HEALING_TIME
+			});
+			pos.x -= circle.getSize().x / 2;
+			pos.y *= -1;
+			pos.y -= circle.getSize().y;
+			circle.setPosition(((pos + SokuLib::camera.translate) * SokuLib::camera.scale).to<int>());
+			circle.draw();
+		}
+	}
+	setRenderMode(1);
 	if (SokuLib::getBattleMgr().matchState <= 5) {
 		DWORD old;
 
