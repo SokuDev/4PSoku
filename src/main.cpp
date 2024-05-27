@@ -1163,12 +1163,12 @@ int __fastcall CSelect_OnRender(SokuLib::Select *This)
 
 	if (This->leftSelectionStage == 1 && SokuLib::leftChar != SokuLib::CHARACTER_RANDOM)
 		renderDeck(SokuLib::leftChar, selectedDecks[0], loadedDecks[0][SokuLib::leftChar],  {28, 98});
-	if (This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
-		renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
-	if (chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
-		renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
-	if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
-		renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});
+	//if (This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
+	//	renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
+	//if (chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
+	//	renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
+	//if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
+	//	renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});
 	return ret;
 }
 
@@ -2201,7 +2201,7 @@ void __declspec(naked) updateCharacterSelect_hook()
 		PUSH ESI
 		CALL updateCharacterSelect
 		POP ESI
-		TEST EAX, EAX
+		TEST AL, AL
 		JNZ ok
 		JMP updateCharacterSelect_hook_failAddr
 	ok:
@@ -3159,7 +3159,7 @@ static bool loadProfileFile(const std::string &path, std::ifstream &stream, std:
 	if (!json.is_object())
 		throw std::invalid_argument("JSON is neither an array nor an object");
 	for (auto &arr : json.items()) {
-		std::stoi(arr.key());
+		(void)std::stoi(arr.key());
 		for (auto &elem : arr.value()) {
 			elem.contains("name") && (elem["name"].get<std::string>(), true);
 			if (!elem.contains("cards") || elem["cards"].get<std::vector<unsigned short>>().size() != 20)
@@ -3170,7 +3170,7 @@ static bool loadProfileFile(const std::string &path, std::ifstream &stream, std:
 		map[elem.first].clear();
 	for (auto &arr : json.items()) {
 		auto &array = arr.value();
-		auto index = std::stoi(arr.key());
+		auto chr = std::stoi(arr.key());
 
 		for (int j = 0; j < array.size(); j++) {
 			auto &elem = array[j];
@@ -3181,9 +3181,9 @@ static bool loadProfileFile(const std::string &path, std::ifstream &stream, std:
 			else
 				deck.name = elem["name"];
 			memcpy(deck.cards.data(), elem["cards"].get<std::vector<unsigned short>>().data(), sizeof(*deck.cards.data()) * deck.cards.size());
-			sanitizeDeck(static_cast<SokuLib::Character>(index), deck);
+			sanitizeDeck(static_cast<SokuLib::Character>(chr), deck);
 			std::sort(deck.cards.begin(), deck.cards.end());
-			map[index].push_back(deck);
+			map[chr].push_back(deck);
 		}
 	}
 	if (index == 4)
@@ -3358,6 +3358,39 @@ void chrSelect_pushActiveInputs()
 		unkSTL_push(&This->offset_0x018[0x60], &chrSelectExtra[1].input);
 }
 
+void __fastcall turnAroundHitBlock(SokuLib::CharacterManager *This, SokuLib::ObjectManager *op)
+{
+	float fVar1;
+	float fVar2;
+	char cVar3;
+	SokuLib::CharacterManager *pPVar4;
+
+	cVar3 = This->objectBase.direction;
+	pPVar4 = op->owner;
+	if (This->objectBase.position.x < pPVar4->objectBase.position.x)
+		This->objectBase.direction = SokuLib::RIGHT;
+	else if (This->objectBase.position.x > pPVar4->objectBase.position.x)
+		This->objectBase.direction = SokuLib::LEFT;
+}
+
+void __declspec(naked) turnAroundHitBlock_hook()
+{
+	__asm {
+		MOV EDX, EDI
+		JMP turnAroundHitBlock
+	}
+}
+
+void __declspec(naked) getCharacterIndexResetHealth_hook() {
+	__asm {
+		MOV ESI, 0x8985E4 //CBattleManagerPtr
+		MOV ESI, [ESI]
+		MOV ESI, dword ptr [ESI + EDI * 0x4 + 0xC]
+		MOV ECX, ESI
+		RET
+	}
+}
+
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	DWORD old;
 
@@ -3492,6 +3525,13 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	new SokuLib::Trampoline(0x46DFC0, swapStuff, 5);
 	SokuLib::TamperNearJmp(0x46E002, restoreOldHud);
 
+	// On hit
+	SokuLib::TamperNearJmpOpr(0x47B17C, turnAroundHitBlock_hook);
+	// On rightblock
+	SokuLib::TamperNearJmpOpr(0x47C2A3, turnAroundHitBlock_hook);
+	// On wrongblock
+	SokuLib::TamperNearJmpOpr(0x47C53C, turnAroundHitBlock_hook);
+
 	new SokuLib::Trampoline(0x4442CD, onMenuTopProfileInit, 5);
 	new SokuLib::Trampoline(0x4448C0, renderExtraProfilesTop, 7);
 	*(char *)0x44CFEE = 0x50;
@@ -3607,6 +3647,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 		0xC7, 0x86, 0x70, 0x01, 0x00, 0x00, 0x1C, 0x00, 0x00, 0x00 // mov [esi+00000170],0000001C
 	};
 	memcpy((void*)0x435988, profileExtraInit, sizeof(profileExtraInit));
+
+	SokuLib::TamperNearCall(0x42A554, getCharacterIndexResetHealth_hook);
+	*(char *)0x42A559 = 0x90;
+	*(char *)0x42A59D = 4;
 
 	og_handleInputs = SokuLib::TamperNearJmpOpr(0x48224D, handlePlayerInputs);
 	s_origLoadDeckData = SokuLib::TamperNearJmpOpr(0x437D23, loadDeckData);
