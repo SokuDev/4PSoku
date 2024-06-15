@@ -18,6 +18,8 @@
 #define printf(...)
 #endif
 
+
+#define Dequeue Deque
 #define FONT_HEIGHT 16
 #define TEXTURE_SIZE 0x200
 #define BOXES_ALPHA 0.25
@@ -28,6 +30,10 @@
 #define RIGHT_BAR SokuLib::Vector2i{479, 422}
 #define LEFT_CROSS SokuLib::Vector2i{108, 417}
 #define RIGHT_CROSS SokuLib::Vector2i{505, 417}
+
+#define HEALING_TIME 180
+#define HEALTH_PERCENT (15.f / 100.f)
+#define HEAL_RADIUS (100)
 
 
 // Contructor:
@@ -362,10 +368,6 @@ static std::pair<SokuLib::PlayerInfo, SokuLib::PlayerInfo> assists = {
 };
 static std::pair<int, int> healing{-1, -1};
 
-#define HEALING_TIME 180
-#define HEALTH_PERCENT (15.f / 100.f)
-#define HEAL_RADIUS (100)
-
 void loadSoku2CSV(LPWSTR path)
 {
 	std::ifstream stream{path};
@@ -670,15 +672,15 @@ static void drawPlayerBoxes(const SokuLib::CharacterManager &manager, bool playe
 	}
 }
 
-static int ctr = 0;
-
 static void checkHealing(int i, int &healing)
 {
 	auto hp1 = dataMgr->players[i]->objectBase.hp;
 	auto hp2 = dataMgr->players[i + 2]->objectBase.hp;
+	const auto FUN_00438ce0 = reinterpret_cast<void (__thiscall *)(void *, unsigned, float, float, unsigned, unsigned)>(0x438CE0);
 
 	if (hp1 == 0 || hp2 == 0) {
 		auto dead = dataMgr->players[i + (hp2 == 0 ? 2 : 0)];
+		auto dead2 = reinterpret_cast<SokuLib::v2::Player *>(dead);
 		auto pos1 = dataMgr->players[i]->objectBase.position;
 		auto pos2 = dataMgr->players[i + 2]->objectBase.position;
 		auto diffX = pos1.x - pos2.x;
@@ -687,9 +689,12 @@ static void checkHealing(int i, int &healing)
 
 		if (diffX * diffX + diffY * diffY <= HEAL_RADIUS * HEAL_RADIUS && strcmp(profiles[i + (hp2 == 0 ? 2 : 0)]->name, "dead"))
 			healing++;
-		(&hud.p1State)[i].lastHp = healing * dead->objectBase.hp / HEALING_TIME;
+		(&hud.p1State)[i].lastHp = healing * dead2->MaxHP / HEALING_TIME;
+		dead2->redHP = (&hud.p1State)[i].lastHp;
 		if (healing == HEALING_TIME) {
+			FUN_00438ce0(dead, 0x8B, dead->objectBase.position.x, dead->objectBase.position.y, 1, 1);
 			dead->objectBase.hp = *(unsigned short *) &dead->objectBase.offset_0x186 * HEALTH_PERCENT;
+			dead->dropInvulTimeLeft = 90;
 			healing = 0;
 		}
 	}
@@ -1354,9 +1359,10 @@ void __stdcall loadDeckData(char *charName, void *csvFile, SokuLib::DeckInfo &de
 			}
 			for (int i = 0; i < 2; i++) {
 				healingCircle[i].texture.loadFromGame(healingSprites[i]);
-				healingCircle[i].setSize(healingCircle[i].texture.getSize());
-				healingCircle[i].rect.width = healingCircle[i].getSize().x;
-				healingCircle[i].rect.height = healingCircle[i].getSize().y;
+				healingCircle[i].setSize({HEAL_RADIUS * 2, HEAL_RADIUS * 2});
+				healingCircle[i].rect.width = healingCircle[i].texture.getSize().x;
+				healingCircle[i].rect.height = healingCircle[i].texture.getSize().y;
+				healingCircle[i].setCamera(&SokuLib::camera);
 			}
 		}
 
@@ -1471,18 +1477,18 @@ int __fastcall onHudRender(CInfoManager *This)
 	setRenderMode(2);
 	for (int i = 0; i < 2; i++) {
 		auto &h = (&healing.first)[i];
+		auto p = dataMgr->players[(dataMgr->players[i]->objectBase.hp == 0 ? 0 : 2) + i];
+
+		if (p->objectBase.hp)
+			continue;
 
 		for (auto &circle: healingCircle) {
-			auto pos = dataMgr->players[(dataMgr->players[i]->objectBase.hp == 0 ? 0 : 2) + i]->objectBase.position;
+			auto pos = p->objectBase.position;
 
-			circle.setSize({
-				circle.rect.width * h / (unsigned) HEALING_TIME,
-				circle.rect.height * h / (unsigned) HEALING_TIME
-			});
 			pos.x -= circle.getSize().x / 2;
 			pos.y *= -1;
-			pos.y -= circle.getSize().y;
-			circle.setPosition(((pos + SokuLib::camera.translate) * SokuLib::camera.scale).to<int>());
+			pos.y -= circle.getSize().y / 2;
+			circle.setPosition(pos.to<int>());
 			circle.draw();
 		}
 	}
@@ -3646,7 +3652,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 		0x90,                                                      // nop
 		0xC7, 0x86, 0x70, 0x01, 0x00, 0x00, 0x1C, 0x00, 0x00, 0x00 // mov [esi+00000170],0000001C
 	};
-	memcpy((void*)0x435988, profileExtraInit, sizeof(profileExtraInit));
+	memcpy((void *)0x435988, profileExtraInit, sizeof(profileExtraInit));
 
 	SokuLib::TamperNearCall(0x42A554, getCharacterIndexResetHealth_hook);
 	*(char *)0x42A559 = 0x90;

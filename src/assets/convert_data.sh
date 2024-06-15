@@ -1,9 +1,11 @@
-export PATH="$(pwd)/shady:$PATH"
-for file in `find $(pwd) -name "*.png" -o -name "*.xml"`; do
+#!/bin/sh
+export SHADY="$(pwd)/shady/shady-cli"
+rm -rf output prepare
+cp -r data prepare
+for file in `find "$(pwd)/prepare" -name "*.png" -o -name "*.xml" -o -name "*wav" -o -name "*.csv"`; do
 	cd $(dirname $file)
-	shady-cli.exe convert $file
+	$SHADY convert $file
+	rm $file
 	cd - >/dev/null
 done
-rm -rf output
-cp -r data output
-find output -name "*.png" -delete -print -o -name "*.xml" -delete -print
+mv prepare output
