@@ -3397,6 +3397,17 @@ void __declspec(naked) getCharacterIndexResetHealth_hook() {
 	}
 }
 
+void __declspec(naked) setGrazeFlags()
+{
+	__asm {
+		CMP dword ptr [EDI + 0x190], 0
+		JNZ _ret
+		MOV dword ptr [EDI + 0x190], 0x6
+	_ret:
+		RET
+	}
+}
+
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	DWORD old;
 
@@ -3657,6 +3668,9 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	SokuLib::TamperNearCall(0x42A554, getCharacterIndexResetHealth_hook);
 	*(char *)0x42A559 = 0x90;
 	*(char *)0x42A59D = 4;
+
+	memset((void *)0x47B592, 0x90, 10);
+	SokuLib::TamperNearCall(0x47B592, setGrazeFlags);
 
 	og_handleInputs = SokuLib::TamperNearJmpOpr(0x48224D, handlePlayerInputs);
 	s_origLoadDeckData = SokuLib::TamperNearJmpOpr(0x437D23, loadDeckData);
