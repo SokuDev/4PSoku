@@ -1168,12 +1168,12 @@ int __fastcall CSelect_OnRender(SokuLib::Select *This)
 
 	if (This->leftSelectionStage == 1 && SokuLib::leftChar != SokuLib::CHARACTER_RANDOM)
 		renderDeck(SokuLib::leftChar, selectedDecks[0], loadedDecks[0][SokuLib::leftChar],  {28, 98});
-	//if (This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
-	//	renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
-	//if (chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
-	//	renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
-	//if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
-	//	renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});
+	if (This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
+		renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
+	if (chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
+		renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
+	if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
+		renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});
 	return ret;
 }
 
@@ -1233,7 +1233,7 @@ void initHud()
 	auto p2 = players[1];
 	auto _p1 = dataMgr->players[0];
 	auto _p2 = dataMgr->players[1];
-
+	
 	puts("Init HUD");
 	players[0] = players[2];
 	players[1] = players[3];
@@ -1468,7 +1468,7 @@ void __declspec(naked) healExtraChrs()
 	}
 }
 
-static int (__thiscall *ogHudRender)(void *);
+static int (__thiscall *s_ogHudRender)(void *);
 
 const double yPos = 62;
 
@@ -1505,7 +1505,7 @@ int __fastcall onHudRender(CInfoManager *This)
 		*(char *)0x47DB15 = 3;
 		*(char *)0x47DB4B = 3;
 		*(const double **)0x47DB57 = &yPos;
-		ogHudRender(&hud2);
+		s_ogHudRender(&hud2);
 		*(char *)0x47D93F = 0;
 		*(char *)0x47D978 = 0;
 		*(char *)0x47D9A0 = 0;
@@ -1517,7 +1517,7 @@ int __fastcall onHudRender(CInfoManager *This)
 		::VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, old, &old);
 	}
 
-	int i = ogHudRender(This);
+	int i = s_ogHudRender(This);
 
 	if (SokuLib::getBattleMgr().matchState <= 5) {
 		hud2.p1Portrait->render(0, 0);
@@ -3408,6 +3408,35 @@ void __declspec(naked) setGrazeFlags()
 	}
 }
 
+void __declspec(naked) swapComboCtrs()
+{
+	__asm {
+		POP        EDX
+
+		MOV        EAX, dword ptr [ESP + 0x14]
+		LEA        EAX, [EAX + ESI * 0x4]
+		MOV        ECX, 0x8985E4
+		ADD        EAX, dword ptr [ECX]
+		MOV        EAX, dword ptr [ESP + EAX * 0x1 + 0x1c]
+		MOV        dword ptr [ESP + ESI * 0x4 + 0x1c], EAX
+
+		MOV        EAX, dword ptr [ESP + 0x14]
+		PUSH       ESI
+		XOR        ESI, 1
+		LEA        EAX, [EAX + ESI * 0x4]
+		MOV        ESI, 0x8985E4
+		ADD        EAX, dword ptr [ESI]
+		POP        ESI
+		MOV        EAX, dword ptr [ESP + EAX * 0x1 + 0x1c]
+
+		MOV        ECX, dword ptr [ESP + 0x18]
+		PUSH       EAX
+		PUSH       ECX
+		MOV        ECX, EDI
+		JMP        EDX
+	}
+}
+
 extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
 	DWORD old;
 
@@ -3426,15 +3455,15 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	// DWORD old;
 	loadSoku2Config();
 	::VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
-	s_originalBattleMgrOnRender          = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onRender, CBattleManager_OnRender);
-	s_originalBattleMgrOnProcess         = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onProcess, CBattleManager_OnProcess);
-	s_originalSelectOnProcess            = SokuLib::TamperDword(&SokuLib::VTable_Select.onProcess, CSelect_OnProcess);
-	s_originalSelectOnRender             = SokuLib::TamperDword(&SokuLib::VTable_Select.onRender, CSelect_OnRender);
-	s_originalTitleOnProcess             = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender, CTitle_OnProcess);
+	s_originalBattleMgrOnRender          = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onRender,    CBattleManager_OnRender);
+	s_originalBattleMgrOnProcess         = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onProcess,   CBattleManager_OnProcess);
+	s_originalSelectOnProcess            = SokuLib::TamperDword(&SokuLib::VTable_Select.onProcess,          CSelect_OnProcess);
+	s_originalSelectOnRender             = SokuLib::TamperDword(&SokuLib::VTable_Select.onRender,           CSelect_OnRender);
+	s_originalTitleOnProcess             = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender,            CTitle_OnProcess);
 	s_originalCProfileDeckEdit_OnProcess = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onProcess, CProfileDeckEdit_OnProcess);
-	s_originalCProfileDeckEdit_OnRender  = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onRender, CProfileDeckEdit_OnRender);
-	s_originalCProfileDeckEdit_Destructor= SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onDestruct, CProfileDeckEdit_Destructor);
-	ogHudRender = (int (__thiscall *)(void *))SokuLib::TamperDword(0x85b544, onHudRender);
+	s_originalCProfileDeckEdit_OnRender  = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onRender,  CProfileDeckEdit_OnRender);
+	s_originalCProfileDeckEdit_Destructor= SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onDestruct,CProfileDeckEdit_Destructor);
+	s_ogHudRender = (int (__thiscall *)(void *))SokuLib::TamperDword(0x85b544, onHudRender);
 	::VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
 
 	::VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
@@ -3671,6 +3700,47 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 
 	memset((void *)0x47B592, 0x90, 10);
 	SokuLib::TamperNearCall(0x47B592, setGrazeFlags);
+
+	// Proration bug fix
+	memmove((void *)0x4799CD, (void *)0x4799D1, 0x4799F2 - 0x4799D1);
+	*(unsigned *)0x4799EE = 0x0424448B;
+	*(char *)0x47AF43 = 0x86; // fld dword ptr [eax+000004B0] -> fld dword ptr [esi+000004B0]
+
+	const unsigned char computeProrationDamage[] = {
+		// mov eax,[ecx+00000170] -> mov eax,[esi+0000016C]
+		0x8B, 0x86, 0x6C, 0x01, 0x00, 0x00
+	};
+	memcpy((void *)0x463F59, computeProrationDamage, sizeof(computeProrationDamage));
+	// fmul dword ptr [esi+000004B0] -> fmul dword ptr [eax+000004B0]
+	*(char *)0x463F83 = 0x88;
+
+	// mov eax,[edi+0000016C] -> mov eax,[esi+0000016C]
+	*(char *)0x47B016 = 0x86;
+	*(char *)0x47B057 = 0x86;
+	*(char *)0x47B048 = 0x86;
+	*(char *)0x47B004 = 0x86;
+	*(char *)0x47AB70 = 0x86;
+
+	*(char *)0x464A82 = 0x51;
+	SokuLib::TamperNearCall(0x464A83, 0x463F50);
+	*(char *)0x464A88 = 0x5E;
+
+	// We swap the left and right combo displays
+	// Original code:
+	//0047e2c0 8b 44 24 14     MOV        EAX,dword ptr [ESP + 0x14]=>local_10
+	//0047e2c4 8b 4c 24 18     MOV        ECX,dword ptr [ESP + 0x18]=>local_c
+	//0047e2c8 8d 04 b0        LEA        EAX,[EAX + ESI*0x4]
+	//0047e2cb 03 05 e4        ADD        EAX,dword ptr [CBattleManagerPtr]
+	//         85 89 00
+	//0047e2d1 8b 44 04 1c     MOV        EAX,dword ptr [ESP + EAX*0x1 + 0x1c]
+	//0047e2d1 8b 44 04 1c     MOV        EAX,dword ptr [ESP + EAX*0x1 + 0x1c]
+	//0047e2d5 50              PUSH       EAX
+	//0047e2d6 51              PUSH       ECX
+	//0047e2d7 8b cf           MOV        ECX,EDI
+	//0047e2d9 89 44 b4 24     MOV        dword ptr [ESP + ESI*0x4 + 0x24]=>local_4,EAX
+	memset((void *)0x47E2C0, 0x90, 0x47E2DD - 0x47E2C0);
+	SokuLib::TamperNearCall(0x47E2C4, swapComboCtrs);
+
 
 	og_handleInputs = SokuLib::TamperNearJmpOpr(0x48224D, handlePlayerInputs);
 	s_origLoadDeckData = SokuLib::TamperNearJmpOpr(0x437D23, loadDeckData);
