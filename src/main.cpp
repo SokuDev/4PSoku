@@ -31,6 +31,7 @@
 #define LEFT_CROSS SokuLib::Vector2i{108, 417}
 #define RIGHT_CROSS SokuLib::Vector2i{505, 417}
 
+#define HEALING_INVUL 90
 #define HEALING_TIME 180
 #define HEALTH_PERCENT (15.f / 100.f)
 #define HEAL_RADIUS (100)
@@ -297,19 +298,21 @@ static unsigned char copyBoxSelectedItem = 0;
 static unsigned char deleteBoxSelectedItem = 0;
 static bool saveError = false;
 static bool escPressed = false;
+static bool revived = false;
 static std::string lastLoadedProfile;
 static std::string loadedProfiles[4];
 
-auto sokuRand = (int (*)(int max))0x4099F0;
-auto getCharName = (char *(*)(int))0x43F3F0;
-auto setRenderMode = [](int mode) {
+const auto FUN_00438ce0 = reinterpret_cast<void (__thiscall *)(void *, unsigned, float, float, unsigned, unsigned)>(0x438CE0);
+const auto sokuRand = (int (*)(int max))0x4099F0;
+const auto getCharName = (char *(*)(int))0x43F3F0;
+const auto setRenderMode = [](int mode) {
 	((void (__thiscall *)(int, int))0x404B80)(0x896B4C, mode);
 };
-auto InputHandler_HandleInput = (bool (__thiscall *)(SokuLib::InputHandler &))0x41FBF0;
-auto getChrName = (char *(*)(SokuLib::Character))0x43F3F0;
-auto getInputManager = (SokuLib::KeymapManager *(*)(int index))0x43E040;
-auto getInputManagerIndex = (char (*)(int index))0x43E070;
-auto initInputManagerArray = (SokuLib::KeyManager *(*)(int index, bool))0x43E6A0;
+const auto InputHandler_HandleInput = (bool (__thiscall *)(SokuLib::InputHandler &))0x41FBF0;
+const auto getChrName = (char *(*)(SokuLib::Character))0x43F3F0;
+const auto getInputManager = (SokuLib::KeymapManager *(*)(int index))0x43E040;
+const auto getInputManagerIndex = (char (*)(int index))0x43E070;
+const auto initInputManagerArray = (SokuLib::KeyManager *(*)(int index, bool))0x43E6A0;
 
 static std::array<std::map<unsigned char, std::vector<Deck>>, 5> loadedDecks;
 std::map<unsigned char, std::map<unsigned short, SokuLib::DrawUtils::Sprite>> cardsTextures;
@@ -676,7 +679,6 @@ static void checkHealing(int i, int &healing)
 {
 	auto hp1 = dataMgr->players[i]->objectBase.hp;
 	auto hp2 = dataMgr->players[i + 2]->objectBase.hp;
-	const auto FUN_00438ce0 = reinterpret_cast<void (__thiscall *)(void *, unsigned, float, float, unsigned, unsigned)>(0x438CE0);
 
 	if (hp1 == 0 || hp2 == 0) {
 		auto dead = dataMgr->players[i + (hp2 == 0 ? 2 : 0)];
@@ -692,10 +694,11 @@ static void checkHealing(int i, int &healing)
 		(&hud.p1State)[i].lastHp = healing * dead2->MaxHP / HEALING_TIME;
 		dead2->redHP = (&hud.p1State)[i].lastHp;
 		if (healing == HEALING_TIME) {
-			FUN_00438ce0(dead, 0x8B, dead->objectBase.position.x, dead->objectBase.position.y, 1, 1);
 			dead->objectBase.hp = *(unsigned short *) &dead->objectBase.offset_0x186 * HEALTH_PERCENT;
-			dead->dropInvulTimeLeft = 90;
 			healing = 0;
+			FUN_00438ce0(dead, 0x8B, dead->objectBase.position.x, dead->objectBase.position.y, 1, 1);
+			dead->dropInvulTimeLeft = max(dead->dropInvulTimeLeft, HEALING_INVUL);
+			//revived = true;
 		}
 	}
 }
@@ -727,8 +730,8 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 			dataMgr->players[i]->objectBase.offset_0x14E[0] = i;
 		init = true;
 	}
-	for (int i = 0; i < 4; i++)
-		if (dataMgr->players[i]->keyMap.pause == 1)
+	for (auto &player : dataMgr->players)
+		if (player->keyMap.pause == 1)
 			return (This->*s_originalBattleMgrOnProcess)();
 
 	unsigned short hps[4];
@@ -745,10 +748,20 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 	}
 	checkHealing(0, healing.first);
 	checkHealing(1, healing.second);
+#if 0
+	if (revived) {
+		for (auto &player : dataMgr->players) {
+			FUN_00438ce0(player, 0x8B, player->objectBase.position.x, player->objectBase.position.y, 1, 1);
+			player->dropInvulTimeLeft = max(player->dropInvulTimeLeft, HEALING_INVUL);
+		}
+		revived = false;
+	}
+#endif
 	healingCircle[0].setRotation(fmod(healingCircle[0].getRotation() + 0.01, M_PI * 2));
 	healingCircle[1].setRotation(-healingCircle[0].getRotation());
 
 	int ret = (This->*s_originalBattleMgrOnProcess)();
+	int index = 0;
 
 	if (This->matchState == 2)
 		for (int i = 0; i < 4; i++) {
@@ -760,29 +773,26 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 			}
 			hps[i] = dataMgr->players[i]->objectBase.hp;
 		}
-	if (This->matchState <= 2 || This->matchState == 4) {
-		int i = 0;
-
-		for (; i < 4; i++) {
-			SokuLib::camera.offset_0x44 = &dataMgr->players[i]->objectBase.position.x;
-			SokuLib::camera.offset_0x48 = &dataMgr->players[i]->objectBase.position.x;
-			SokuLib::camera.offset_0x4C = &dataMgr->players[i]->objectBase.position.y;
-			SokuLib::camera.offset_0x50 = &dataMgr->players[i]->objectBase.position.y;
-			if (dataMgr->players[i]->objectBase.hp != 0)
+	if (This->matchState <= 2 || This->matchState == 4)
+		for (; index < 4; index++) {
+			SokuLib::camera.offset_0x44 = &dataMgr->players[index]->objectBase.position.x;
+			SokuLib::camera.offset_0x48 = &dataMgr->players[index]->objectBase.position.x;
+			SokuLib::camera.offset_0x4C = &dataMgr->players[index]->objectBase.position.y;
+			SokuLib::camera.offset_0x50 = &dataMgr->players[index]->objectBase.position.y;
+			if (dataMgr->players[index]->objectBase.hp != 0)
 				break;
 		}
-		for (; i < 4; i++) {
-			if (dataMgr->players[i]->objectBase.hp == 0)
-				continue;
-			if (*SokuLib::camera.offset_0x44 > dataMgr->players[i]->objectBase.position.x)
-				SokuLib::camera.offset_0x44 = &dataMgr->players[i]->objectBase.position.x;
-			if (*SokuLib::camera.offset_0x48 < dataMgr->players[i]->objectBase.position.x)
-				SokuLib::camera.offset_0x48 = &dataMgr->players[i]->objectBase.position.x;
-			if (*SokuLib::camera.offset_0x4C > dataMgr->players[i]->objectBase.position.y)
-				SokuLib::camera.offset_0x4C = &dataMgr->players[i]->objectBase.position.y;
-			if (*SokuLib::camera.offset_0x50 < dataMgr->players[i]->objectBase.position.y)
-				SokuLib::camera.offset_0x50 = &dataMgr->players[i]->objectBase.position.y;
-		}
+	for (; index < 4; index++) {
+		if (dataMgr->players[index]->objectBase.hp == 0 && (This->matchState <= 2 || This->matchState == 4))
+			continue;
+		if (*SokuLib::camera.offset_0x44 > dataMgr->players[index]->objectBase.position.x)
+			SokuLib::camera.offset_0x44 = &dataMgr->players[index]->objectBase.position.x;
+		if (*SokuLib::camera.offset_0x48 < dataMgr->players[index]->objectBase.position.x)
+			SokuLib::camera.offset_0x48 = &dataMgr->players[index]->objectBase.position.x;
+		if (*SokuLib::camera.offset_0x4C > dataMgr->players[index]->objectBase.position.y)
+			SokuLib::camera.offset_0x4C = &dataMgr->players[index]->objectBase.position.y;
+		if (*SokuLib::camera.offset_0x50 < dataMgr->players[index]->objectBase.position.y)
+			SokuLib::camera.offset_0x50 = &dataMgr->players[index]->objectBase.position.y;
 	}
 	for (int i = 0; i < 4; i++) {
 		if (dataMgr->players[i]->keyManager->keymapManager->input.select == 1) {
