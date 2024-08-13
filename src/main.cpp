@@ -779,24 +779,24 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 		}
 	if (This->matchState <= 2 || This->matchState == 4)
 		for (; index < 4; index++) {
-			SokuLib::camera.offset_0x44 = &dataMgr->players[index]->objectBase.position.x;
-			SokuLib::camera.offset_0x48 = &dataMgr->players[index]->objectBase.position.x;
-			SokuLib::camera.offset_0x4C = &dataMgr->players[index]->objectBase.position.y;
-			SokuLib::camera.offset_0x50 = &dataMgr->players[index]->objectBase.position.y;
+			SokuLib::camera.p1X = &dataMgr->players[index]->objectBase.position.x;
+			SokuLib::camera.p2X = &dataMgr->players[index]->objectBase.position.x;
+			SokuLib::camera.p1Y = &dataMgr->players[index]->objectBase.position.y;
+			SokuLib::camera.p2Y = &dataMgr->players[index]->objectBase.position.y;
 			if (dataMgr->players[index]->objectBase.hp != 0)
 				break;
 		}
 	for (; index < 4; index++) {
 		if (dataMgr->players[index]->objectBase.hp == 0 && (This->matchState <= 2 || This->matchState == 4))
 			continue;
-		if (*SokuLib::camera.offset_0x44 > dataMgr->players[index]->objectBase.position.x)
-			SokuLib::camera.offset_0x44 = &dataMgr->players[index]->objectBase.position.x;
-		if (*SokuLib::camera.offset_0x48 < dataMgr->players[index]->objectBase.position.x)
-			SokuLib::camera.offset_0x48 = &dataMgr->players[index]->objectBase.position.x;
-		if (*SokuLib::camera.offset_0x4C > dataMgr->players[index]->objectBase.position.y)
-			SokuLib::camera.offset_0x4C = &dataMgr->players[index]->objectBase.position.y;
-		if (*SokuLib::camera.offset_0x50 < dataMgr->players[index]->objectBase.position.y)
-			SokuLib::camera.offset_0x50 = &dataMgr->players[index]->objectBase.position.y;
+		if (*SokuLib::camera.p1X > dataMgr->players[index]->objectBase.position.x)
+			SokuLib::camera.p1X = &dataMgr->players[index]->objectBase.position.x;
+		if (*SokuLib::camera.p2X < dataMgr->players[index]->objectBase.position.x)
+			SokuLib::camera.p2X = &dataMgr->players[index]->objectBase.position.x;
+		if (*SokuLib::camera.p1Y > dataMgr->players[index]->objectBase.position.y)
+			SokuLib::camera.p1Y = &dataMgr->players[index]->objectBase.position.y;
+		if (*SokuLib::camera.p2Y < dataMgr->players[index]->objectBase.position.y)
+			SokuLib::camera.p2Y = &dataMgr->players[index]->objectBase.position.y;
 	}
 	for (int i = 0; i < 4; i++) {
 		if (dataMgr->players[i]->keyManager->keymapManager->input.select == 1) {
@@ -3677,6 +3677,8 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	new SokuLib::Trampoline(0x42296C, chrSelect_pushActiveInputs, 5);
 
 	og_SelectConstruct = SokuLib::TamperNearJmpOpr(0x41E55F, CSelect_construct);
+	SokuLib::TamperNearJmpOpr(0x41E263, CSelect_construct);
+	SokuLib::TamperNearJmpOpr(0x41E2C3, CSelect_construct);
 
 	SokuLib::TamperNearCall(0x42112C, renderChrSelectChrDataGear_hook);
 	*(char *)0x421131 = 0x90;
