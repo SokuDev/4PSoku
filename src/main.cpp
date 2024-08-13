@@ -187,6 +187,10 @@ struct RivControl {
 
 static unsigned char (__fastcall *og_advanceFrame)(SokuLib::CharacterManager *);
 static void (*s_originalDrawGradiantBar)(float param1, float param2, float param3);
+static int (SokuLib::SelectServer::*s_originalSelectServerOnProcess)();
+static int (SokuLib::SelectServer::*s_originalSelectServerOnRender)();
+static int (SokuLib::SelectClient::*s_originalSelectClientOnProcess)();
+static int (SokuLib::SelectClient::*s_originalSelectClientOnRender)();
 static int (SokuLib::Select::*s_originalSelectOnProcess)();
 static int (SokuLib::Select::*s_originalSelectOnRender)();
 static int (SokuLib::Title::*s_originalTitleOnProcess)();
@@ -945,30 +949,8 @@ void generateFakeDecks()
 	convertDeckToSokuFormat(tmp, assists.second.effectiveDeck);
 }
 
-int __fastcall CSelect_OnProcess(SokuLib::Select *This)
+void selectProcessCommon(SokuLib::Select *This, int ret)
 {
-	int ret = (This->*s_originalSelectOnProcess)();
-
-	// TODO: Support editing profile for P3 and P4
-	if (!SokuLib::menuManager.empty() && *SokuLib::getMenuObj<int>() == 0x859820) {
-		auto obj = SokuLib::getMenuObj<int>();
-		auto selected = obj[0x1A];
-
-		if (selected >= 2 && selected <= 3)
-			editSelectedProfile = selected - 2;
-		else
-			editSelectedProfile = 4;
-	}
-
-	if (
-		(This->leftKeys && This->leftKeys->input.spellcard == 1) ||
-		(This->rightKeys && This->rightKeys->input.spellcard == 1) ||
-		(chrSelectExtra[0].input && chrSelectExtra[0].input->input.spellcard == 1) ||
-		(chrSelectExtra[1].input && chrSelectExtra[1].input->input.spellcard == 1)
-	) {
-		displayCards = !displayCards;
-		SokuLib::playSEWaveBuffer(0x27);
-	}
 	if (This->leftSelectionStage == 3 && This->rightSelectionStage == 3 && chrSelectExtra[0].selectState == 3 && chrSelectExtra[1].selectState == 3) {
 		if (counter < 60)
 			counter++;
@@ -1008,8 +990,6 @@ int __fastcall CSelect_OnProcess(SokuLib::Select *This)
 		lastChrs[2] = assists.first.character;
 		lastChrs[3] = assists.second.character;
 	}
-	if (ret == SokuLib::SCENE_LOADING)
-		generateFakeDecks();
 	if (ret == SokuLib::SCENE_TITLE) {
 		assists.first.character = SokuLib::CHARACTER_CIRNO;
 		assists.second.character = SokuLib::CHARACTER_MARISA;
@@ -1066,6 +1046,44 @@ int __fastcall CSelect_OnProcess(SokuLib::Select *This)
 		if (dat.object)
 			dat.object->update();
 	}
+}
+
+int __fastcall CSelect_OnProcess(SokuLib::Select *This)
+{
+	int ret = (This->*s_originalSelectOnProcess)();
+
+	if (!SokuLib::menuManager.empty() && *SokuLib::getMenuObj<int>() == 0x859820) {
+		auto obj = SokuLib::getMenuObj<int>();
+		auto selected = obj[0x1A];
+
+		if (selected >= 2 && selected <= 3)
+			editSelectedProfile = selected - 2;
+		else
+			editSelectedProfile = 4;
+	}
+	selectProcessCommon(This, ret);
+	if (ret == SokuLib::SCENE_LOADING)
+		generateFakeDecks();
+	return ret;
+}
+
+int __fastcall CSelectCL_OnProcess(SokuLib::SelectClient *This)
+{
+	int ret = (This->*s_originalSelectClientOnProcess)();
+
+	selectProcessCommon(&This->base, ret);
+	if (ret == SokuLib::SCENE_LOADINGCL)
+		generateFakeDecks();
+	return ret;
+}
+
+int __fastcall CSelectSV_OnProcess(SokuLib::SelectServer *This)
+{
+	int ret = (This->*s_originalSelectServerOnProcess)();
+
+	selectProcessCommon(&This->base, ret);
+	if (ret == SokuLib::SCENE_LOADINGSV)
+		generateFakeDecks();
 	return ret;
 }
 
@@ -1173,7 +1191,6 @@ void renderDeck(SokuLib::Character chr, unsigned select, const std::vector<Deck>
 
 int __fastcall CSelect_OnRender(SokuLib::Select *This)
 {
-	std::string name;
 	auto ret = (This->*s_originalSelectOnRender)();
 
 	if (This->leftSelectionStage == 1 && SokuLib::leftChar != SokuLib::CHARACTER_RANDOM)
@@ -1184,6 +1201,28 @@ int __fastcall CSelect_OnRender(SokuLib::Select *This)
 		renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
 	if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
 		renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});
+	return ret;
+}
+
+int __fastcall CSelectCL_OnRender(SokuLib::SelectClient *This)
+{
+	auto ret = (This->*s_originalSelectClientOnRender)();
+
+/*	if (This->leftSelectionStage == 1 && SokuLib::leftChar != SokuLib::CHARACTER_RANDOM)
+		renderDeck(SokuLib::leftChar, selectedDecks[0], loadedDecks[0][SokuLib::leftChar],  {28, 98});
+	if (This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
+		renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
+	if (chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
+		renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
+	if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
+		renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});*/
+	return ret;
+}
+
+int __fastcall CSelectSV_OnRender(SokuLib::SelectServer *This)
+{
+	auto ret = (This->*s_originalSelectServerOnRender)();
+
 	return ret;
 }
 
@@ -3469,6 +3508,10 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	s_originalBattleMgrOnProcess         = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onProcess,   CBattleManager_OnProcess);
 	s_originalSelectOnProcess            = SokuLib::TamperDword(&SokuLib::VTable_Select.onProcess,          CSelect_OnProcess);
 	s_originalSelectOnRender             = SokuLib::TamperDword(&SokuLib::VTable_Select.onRender,           CSelect_OnRender);
+	s_originalSelectClientOnProcess      = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onProcess,    CSelectCL_OnProcess);
+	s_originalSelectClientOnRender       = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onRender,     CSelectCL_OnRender);
+	s_originalSelectServerOnProcess      = SokuLib::TamperDword(&SokuLib::VTable_SelectServer.onProcess,    CSelectSV_OnProcess);
+	s_originalSelectServerOnRender       = SokuLib::TamperDword(&SokuLib::VTable_SelectServer.onRender,     CSelectSV_OnRender);
 	s_originalTitleOnProcess             = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender,            CTitle_OnProcess);
 	s_originalCProfileDeckEdit_OnProcess = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onProcess, CProfileDeckEdit_OnProcess);
 	s_originalCProfileDeckEdit_OnRender  = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onRender,  CProfileDeckEdit_OnRender);
