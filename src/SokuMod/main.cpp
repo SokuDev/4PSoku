@@ -12,6 +12,7 @@
 #include <SokuLib.hpp>
 #include <shlwapi.h>
 #include <thread>
+#include "CustomPackets.hpp"
 
 #ifndef _DEBUG
 #define puts(...)
@@ -23,19 +24,20 @@
 #define FONT_HEIGHT 16
 #define TEXTURE_SIZE 0x200
 #define BOXES_ALPHA 0.25
-#define ASSIST_BOX_Y 429
-#define LEFT_ASSIST_BOX_X 57
-#define RIGHT_ASSIST_BOX_X 475
-#define LEFT_BAR SokuLib::Vector2i{82, 422}
-#define RIGHT_BAR SokuLib::Vector2i{479, 422}
-#define LEFT_CROSS SokuLib::Vector2i{108, 417}
-#define RIGHT_CROSS SokuLib::Vector2i{505, 417}
 
 #define HEALING_INVUL 90
 #define HEALING_TIME 180
 #define HEALTH_PERCENT (15.f / 100.f)
 #define HEAL_RADIUS (100)
 
+#define sendPacket(p) do { \
+	auto &__netobj = SokuLib::getNetObject(); \
+	SokuLib::DLL::ws2_32.sendto(__netobj.netUdp.socket, (char *)&(p), sizeof(p), 0, (sockaddr *)&__netobj.netUdp.opponent, sizeof(__netobj.netUdp.opponent));                     \
+} while (false)
+
+
+const char emptyMagicString[32] = "\0\x1F\x54\xF2\xA2\x67\x90\x78\xC2";
+const char *emptyName = "<color FF8000>[Empty Slot]</color>";
 
 // Contructor:
 // void FUN_0047f070(HudPlayerState *param_1, char param_1_00, CDesignBase *param_3, CDesignBase *param_4, int param_5)
@@ -187,8 +189,6 @@ struct RivControl {
 
 static unsigned char (__fastcall *og_advanceFrame)(SokuLib::CharacterManager *);
 static void (*s_originalDrawGradiantBar)(float param1, float param2, float param3);
-static int (SokuLib::SelectServer::*s_originalSelectServerOnProcess)();
-static int (SokuLib::SelectServer::*s_originalSelectServerOnRender)();
 static int (SokuLib::SelectClient::*s_originalSelectClientOnProcess)();
 static int (SokuLib::SelectClient::*s_originalSelectClientOnRender)();
 static int (SokuLib::Select::*s_originalSelectOnProcess)();
@@ -203,7 +203,8 @@ static SokuLib::ProfileDeckEdit *(SokuLib::ProfileDeckEdit::*og_CProfileDeckEdit
 static void (__fastcall *og_handleInputs)(SokuLib::CharacterManager *);
 static void (__fastcall *ogBattleMgrHandleCollision)(SokuLib::BattleManager*, int, void*, SokuLib::CharacterManager*);
 static void (__stdcall *s_origLoadDeckData)(char *, void *, SokuLib::DeckInfo &, int, SokuLib::Dequeue<short> &);
-static void (*og_FUN4098D6)(int, int, int, int);
+static int (*og_FUN4098D6)();
+static void (__fastcall *og_FUNCALL43F996)(void *);
 
 static GameDataManager*& dataMgr = *(GameDataManager**)SokuLib::ADDR_GAME_DATA_MANAGER;
 
@@ -265,6 +266,7 @@ static bool anim = false;
 static HMODULE myModule;
 static SokuLib::DrawUtils::Sprite healingCircle[2];
 static SokuLib::DrawUtils::Sprite cursors[4];
+static SokuLib::DrawUtils::Sprite cursors2[4];
 static bool assetsLoaded = false;
 static CInfoManager hud2;
 static bool hudInit = false;
@@ -305,6 +307,23 @@ static bool escPressed = false;
 static bool revived = false;
 static std::string lastLoadedProfile;
 static std::string loadedProfiles[4];
+static SokuLib::Sprite extraNetProfileNames[2];
+static int extraNetProfileNamesTextures[2];
+static char extraOnlineNames[2][32];
+static bool characterSelectLocked = false;
+static char mySlot = -1;
+static char remoteMySlot = -1;
+static char selectedSlot = -1;
+static bool slotsTaken[4] = {false, false, false, false};
+static SokuLib::DrawUtils::Sprite chooseBoxBack;
+static SokuLib::DrawUtils::Sprite chooseBoxText;
+static SokuLib::DrawUtils::Sprite chooseBoxWaitText;
+static SokuLib::KeymapManager extraOnlineInputs[2] = {{(void *)0x85844C, {}, {}, {}, {}, true}, {(void *)0x85844C, {}, {}, {}, {}, true}};
+static std::deque<unsigned short> extraOnlineInputsBuffer[2];
+static std::vector<std::array<SokuLib::Inputs, 4>> replayInputs;
+unsigned displayInputs = 0;
+static SokuLib::DrawUtils::Sprite inputsSheet;
+static SokuLib::DrawUtils::Sprite numbersSheet;
 
 const auto FUN_00438ce0 = reinterpret_cast<void (__thiscall *)(void *, unsigned, float, float, unsigned, unsigned)>(0x438CE0);
 const auto sokuRand = (int (*)(int max))0x4099F0;
@@ -715,8 +734,21 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 		return (This->*s_originalBattleMgrOnProcess)();
 	//if (players[0]->objectBase.hp == 0 && players[2]->objectBase.hp == 0 || players[1]->objectBase.hp == 0 && players[3]->objectBase.hp == 0)
 	//	return SokuLib::SCENE_SELECT;
-	if (SokuLib::checkKeyOneshot(DIK_F4, false, false, false))
-		disp = !disp;
+	if (SokuLib::mainMode != SokuLib::BATTLE_MODE_VSSERVER && SokuLib::mainMode != SokuLib::BATTLE_MODE_VSCLIENT) {
+		if (SokuLib::checkKeyOneshot(DIK_F4, false, false, false))
+			disp = !disp;
+	} else {
+		if (SokuLib::checkKeyOneshot(DIK_F1, false, false, false))
+			displayInputs = 1;
+		if (SokuLib::checkKeyOneshot(DIK_F2, false, false, false))
+			displayInputs = 2;
+		if (SokuLib::checkKeyOneshot(DIK_F3, false, false, false))
+			displayInputs = 3;
+		if (SokuLib::checkKeyOneshot(DIK_F4, false, false, false))
+			displayInputs = 4;
+		if (SokuLib::checkKeyOneshot(DIK_F5, false, false, false))
+			displayInputs = 0;
+	}
 	if (!init) {
 		puts("Init assisters");
 		auto alloc = SokuLib::New<void *>(4);
@@ -773,7 +805,7 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 				for (int j = (i & 1) ^ 1; j < 4; j += 2)
 					if (dataMgr->players[j]->objectBase.opponent == dataMgr->players[i])
 						dataMgr->players[j]->objectBase.opponent = dataMgr->players[i ^ 2];
-				SokuLib::playSEWaveBuffer(44);
+				SokuLib::playSEWaveBuffer(SokuLib::SFX_KNOCK_OUT);
 			}
 			hps[i] = dataMgr->players[i]->objectBase.hp;
 		}
@@ -809,12 +841,6 @@ int __fastcall CBattleManager_OnProcess(SokuLib::BattleManager *This)
 	}
 	if (!SokuLib::menuManager.empty() && SokuLib::sceneId == SokuLib::SCENE_BATTLE)
 		return ret;
-
-	if (SokuLib::checkKeyOneshot(DIK_F8, false, false, false) && SokuLib::mainMode != SokuLib::BATTLE_MODE_VSSERVER && SokuLib::mainMode != SokuLib::BATTLE_MODE_VSCLIENT) {
-		This->currentRound = (This->currentRound + 1) % 3;
-		This->matchState = 0;
-		anim = false;
-	}
 
 	if (players[2]->timeStop > 1)
 		players[0]->timeStop = max(players[0]->timeStop + 1, 2);
@@ -965,13 +991,13 @@ void selectProcessCommon(SokuLib::Select *This, int ret)
 			auto input = (&This->leftKeys)[i]->input.horizontalAxis;
 
 			if (input == -1 || (input <= -36 && input % 6 == 0)) {
-				SokuLib::playSEWaveBuffer(0x27);
+				SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 				if (selectedDecks[i] == 0)
 					selectedDecks[i] = decks.size() + 3 - decks.empty();
 				else
 					selectedDecks[i]--;
 			} else if (input == 1 || (input >= 36 && input % 6 == 0)) {
-				SokuLib::playSEWaveBuffer(0x27);
+				SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 				if (selectedDecks[i] == decks.size() + 3 - decks.empty())
 					selectedDecks[i] = 0;
 				else
@@ -1046,6 +1072,8 @@ void selectProcessCommon(SokuLib::Select *This, int ret)
 		if (dat.object)
 			dat.object->update();
 	}
+	if (ret == SokuLib::SCENE_LOADING)
+		generateFakeDecks();
 }
 
 int __fastcall CSelect_OnProcess(SokuLib::Select *This)
@@ -1062,8 +1090,6 @@ int __fastcall CSelect_OnProcess(SokuLib::Select *This)
 			editSelectedProfile = 4;
 	}
 	selectProcessCommon(This, ret);
-	if (ret == SokuLib::SCENE_LOADING)
-		generateFakeDecks();
 	return ret;
 }
 
@@ -1071,25 +1097,75 @@ int __fastcall CSelectCL_OnProcess(SokuLib::SelectClient *This)
 {
 	int ret = (This->*s_originalSelectClientOnProcess)();
 
+	if (characterSelectLocked) {
+		This->characterSelectEnded = false;
+		SokuLib::leftPlayerInfo.character = SokuLib::CHARACTER_REIMU;
+		SokuLib::rightPlayerInfo.character = SokuLib::CHARACTER_SANAE;
+		assists.first.character = SokuLib::CHARACTER_CIRNO;
+		assists.second.character = SokuLib::CHARACTER_MARISA;
+
+		This->base.chrsSelected = 0;
+		This->base.leftSelectionStage = 0;
+		This->base.rightSelectionStage = 0;
+		chrSelectExtra[0].selectState = 0;
+		chrSelectExtra[1].selectState = 0;
+
+		This->base.leftCharInput.pos = This->base.leftCharInput.maxValue / 2 - 1;
+		This->base.rightCharInput.pos = This->base.rightCharInput.maxValue / 2;
+		chrSelectExtra[0].chrHandler.pos = chrSelectExtra[0].chrHandler.maxValue / 2 + 1;
+		chrSelectExtra[1].chrHandler.pos = chrSelectExtra[0].chrHandler.maxValue / 2 - 2;
+
+		This->base.leftPalInput.pos = 0;
+		This->base.rightPalInput.pos = 0;
+		chrSelectExtra[0].palHandler.pos = 0;
+		chrSelectExtra[1].palHandler.pos = 0;
+
+		This->base.leftDeckInput.pos = 0;
+		This->base.rightDeckInput.pos = 0;
+		chrSelectExtra[0].deckHandler.pos = 0;
+		chrSelectExtra[1].deckHandler.pos = 0;
+
+		This->base.leftRandomDeck = false;
+		This->base.rightRandomDeck = false;
+
+		if (mySlot == -1) {
+			while (slotsTaken[selectedSlot])
+				selectedSlot = (selectedSlot + 1) % 4;
+
+			auto input = SokuLib::inputMgrs.input.horizontalAxis;
+
+			if (input == -1 || (input <= -36 && input % 6 == 0)) {
+				SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
+				do
+					if (selectedSlot == 0)
+						selectedSlot = 3;
+					else
+						selectedSlot--;
+				while (slotsTaken[selectedSlot]);
+			} else if (input == 1 || (input >= 36 && input % 6 == 0)) {
+				SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
+				do
+					selectedSlot = (selectedSlot + 1) % 4;
+				while (slotsTaken[selectedSlot]);
+			}
+			if (SokuLib::inputMgrs.input.a == 1)
+				mySlot = selectedSlot;
+		} else if (SokuLib::inputMgrs.input.b == 1)
+			mySlot = -1;
+		if (mySlot != remoteMySlot) {
+			PacketPlayerJoinAck packet{PLAYER_JOIN_ACK, mySlot};
+
+			sendPacket(packet);
+		}
+	}
 	selectProcessCommon(&This->base, ret);
-	if (ret == SokuLib::SCENE_LOADINGCL)
-		generateFakeDecks();
 	return ret;
 }
 
-int __fastcall CSelectSV_OnProcess(SokuLib::SelectServer *This)
+void __fastcall CBattleManager_HandleCollision(SokuLib::BattleManager* This, int unused, void* object, SokuLib::CharacterManager* character)
 {
-	int ret = (This->*s_originalSelectServerOnProcess)();
-
-	selectProcessCommon(&This->base, ret);
-	if (ret == SokuLib::SCENE_LOADINGSV)
-		generateFakeDecks();
-	return ret;
-}
-
-void __fastcall CBattleManager_HandleCollision(SokuLib::BattleManager* This, int unused, void* object, SokuLib::CharacterManager* character) {
 	auto players = (SokuLib::CharacterManager**)((int)This + 0x0C);
-	SokuLib::CharacterManager *assist;
+	SokuLib::CharacterManager *assist = nullptr;
 
 	for (int i = 0; i < 4; i++)
 		if (character == players[i]) {
@@ -1204,26 +1280,105 @@ int __fastcall CSelect_OnRender(SokuLib::Select *This)
 	return ret;
 }
 
+void onlineChrSelectRenderCommon(SokuLib::Select *This)
+{
+	if (remoteMySlot < 0) {
+		chooseBoxBack.draw();
+		chooseBoxText.draw();
+		cursors2[selectedSlot].setPosition({
+			static_cast<int>(chooseBoxText.getPosition().x + chooseBoxText.getSize().x),
+			static_cast<int>(240 - cursors2[selectedSlot].getSize().y / 2)
+		});
+		cursors2[selectedSlot].draw();
+	} else if (characterSelectLocked) {
+		chooseBoxBack.draw();
+		chooseBoxWaitText.draw();
+		cursors2[selectedSlot].setPosition({
+			static_cast<int>(chooseBoxWaitText.getPosition().x + chooseBoxWaitText.getSize().x),
+			static_cast<int>(240 - cursors2[selectedSlot].getSize().y / 2)
+		});
+		cursors2[selectedSlot].draw();
+	}
+	if (remoteMySlot == 0 && This->leftSelectionStage == 1 && SokuLib::leftChar != SokuLib::CHARACTER_RANDOM)
+		renderDeck(SokuLib::leftChar, selectedDecks[0], loadedDecks[0][SokuLib::leftChar],  {28, 98});
+	if (remoteMySlot == 1 && This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
+		renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
+	if (remoteMySlot == 2 && chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
+		renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
+	if (remoteMySlot == 3 && chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
+		renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});
+}
+
 int __fastcall CSelectCL_OnRender(SokuLib::SelectClient *This)
 {
 	auto ret = (This->*s_originalSelectClientOnRender)();
 
-/*	if (This->leftSelectionStage == 1 && SokuLib::leftChar != SokuLib::CHARACTER_RANDOM)
-		renderDeck(SokuLib::leftChar, selectedDecks[0], loadedDecks[0][SokuLib::leftChar],  {28, 98});
-	if (This->rightSelectionStage == 1 && SokuLib::rightChar != SokuLib::CHARACTER_RANDOM)
-		renderDeck(SokuLib::rightChar, selectedDecks[1], loadedDecks[1][SokuLib::rightChar], {28, 384});
-	if (chrSelectExtra[0].selectState == 1 && assists.first.character != SokuLib::CHARACTER_RANDOM)
-		renderDeck(assists.first.character, chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character],  {178, 98});
-	if (chrSelectExtra[1].selectState == 1 && assists.second.character != SokuLib::CHARACTER_RANDOM)
-		renderDeck(assists.second.character, chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], {178, 384});*/
+	onlineChrSelectRenderCommon(&This->base);
 	return ret;
 }
 
-int __fastcall CSelectSV_OnRender(SokuLib::SelectServer *This)
+void renderInput(SokuLib::Inputs input, unsigned time, SokuLib::Vector2i pos)
 {
-	auto ret = (This->*s_originalSelectServerOnRender)();
+	int high = time == 0 ? 1 : std::pow(10, std::floor(std::log10(time)));
+	auto right = pos.x + 118;
 
-	return ret;
+	numbersSheet.rect.top = 128;
+	while (high) {
+		numbersSheet.rect.left = 1 + (time / high % 10) * 14;
+		numbersSheet.setPosition(pos);
+		numbersSheet.draw();
+		pos.x += numbersSheet.getSize().x;
+		high /= 10;
+	}
+	pos.x = right - 25;
+
+	auto dir = 5 - input.battle.left + input.battle.right - input.battle.down * 3 + input.battle.up * 3;
+	char index[] = {7, 1, 6, 2, -1, 3, 4, 0, 5};
+
+	if (dir != 5) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = index[dir - 1] * 32;
+		inputsSheet.rect.top = 0;
+		inputsSheet.setPosition(pos);
+		inputsSheet.draw();
+	}
+	inputsSheet.rect.top = 32;
+	pos.x -= 24;
+	if (input.battle.BandC) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = 5 * 32;
+		inputsSheet.draw();
+		pos.x -= 12;
+	}
+	if (input.battle.AandB) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = 4 * 32;
+		inputsSheet.draw();
+		pos.x -= 12;
+	}
+	if (input.battle.dash) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = 3 * 32;
+		inputsSheet.draw();
+		pos.x -= 12;
+	}
+	if (input.battle.C) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = 2 * 32;
+		inputsSheet.draw();
+		pos.x -= 12;
+	}
+	if (input.battle.B) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = 1 * 32;
+		inputsSheet.draw();
+		pos.x -= 12;
+	}
+	if (input.battle.A) {
+		inputsSheet.setPosition(pos);
+		inputsSheet.rect.left = 0 * 32;
+		inputsSheet.draw();
+	}
 }
 
 void __fastcall CBattleManager_OnRender(SokuLib::BattleManager *This)
@@ -1254,6 +1409,46 @@ void __fastcall CBattleManager_OnRender(SokuLib::BattleManager *This)
 			}
 			drawPlayerBoxes(*dataMgr->players[2]);
 			drawPlayerBoxes(*dataMgr->players[3]);
+		}
+	}
+	if (displayInputs) {
+		SokuLib::DrawUtils::RectangleShape rect;
+		SokuLib::Vector2i pos = {20, 100};
+
+		rect.setPosition(pos);
+		rect.setSize({94, 300});
+		rect.setBorderColor(SokuLib::Color::Transparent);
+		rect.setFillColor(SokuLib::Color{0x80, 0x80, 0x80, 0x80});
+		rect.draw();
+
+		rect.setPosition({pos.x + 94, pos.y});
+		rect.setSize({26, 300});
+		rect.setFillColor(SokuLib::Color{0x20, 0x20, 0x20, 0x80});
+		rect.draw();
+
+		if (!replayInputs.empty()) {
+			SokuLib::Inputs input = replayInputs[replayInputs.size() - 1][displayInputs - 1];
+			unsigned timer = 0;
+
+			pos.x += 2;
+			pos.y += 2;
+
+			for (size_t i = replayInputs.size(); i; i--) {
+				auto &in = replayInputs[i - 1][displayInputs - 1];
+
+				if (in.raw == input.raw) {
+					timer++;
+					continue;
+				}
+				renderInput(input, timer, pos);
+				pos.y += 26;
+				if (pos.y + 24 > 400)
+					break;
+				input = in;
+				timer = 1;
+			}
+			if (pos.y + 24 < 400)
+				renderInput(input, timer, pos);
 		}
 	}
 }
@@ -1388,32 +1583,6 @@ void __stdcall loadDeckData(char *charName, void *csvFile, SokuLib::DeckInfo &de
 		if (spawned)
 			init = false;
 		spawned = true;
-		if (!cursors[0].texture.hasTexture()) {
-			const char *cursorSprites[] = {
-				"data/scene/select/character/04c_cursor1p.bmp",
-				"data/scene/select/character/04c_cursor2p.bmp",
-				"data/scene/select/character/04c_cursor3p.bmp",
-				"data/scene/select/character/04c_cursor4p.bmp"
-			};
-			const char *healingSprites[] = {
-				"data/character/common/breakEF_in002.bmp",
-				"data/character/common/breakEF_out002.bmp"
-			};
-
-			for (int i = 0; i < 4; i++) {
-				cursors[i].texture.loadFromGame(cursorSprites[i]);
-				cursors[i].setSize(cursors[i].texture.getSize());
-				cursors[i].rect.width = cursors[i].getSize().x;
-				cursors[i].rect.height = cursors[i].getSize().y;
-			}
-			for (int i = 0; i < 2; i++) {
-				healingCircle[i].texture.loadFromGame(healingSprites[i]);
-				healingCircle[i].setSize({HEAL_RADIUS * 2, HEAL_RADIUS * 2});
-				healingCircle[i].rect.width = healingCircle[i].texture.getSize().x;
-				healingCircle[i].rect.height = healingCircle[i].texture.getSize().y;
-				healingCircle[i].setCamera(&SokuLib::camera);
-			}
-		}
 
 		SokuLib::CharacterManager** players = (SokuLib::CharacterManager**)((int)&SokuLib::getBattleMgr() + 0xC);
 
@@ -1453,22 +1622,28 @@ void __fastcall handlePlayerInputs(SokuLib::CharacterManager *This)
 		og_handleInputs(dataMgr->players[3]);
 }
 
-void loadExtraPlayerInputs(int a, int b, int c, int d)
+int loadExtraPlayerInputs()
 {
-	og_FUN4098D6(a, b, c, d);
-	if (SokuLib::mainMode != SokuLib::BATTLE_MODE_VSPLAYER)
-		return;
+	int g = og_FUN4098D6();
 
-	auto key = &keymaps.first;
+	if (SokuLib::mainMode == SokuLib::BATTLE_MODE_VSPLAYER) {
+		auto key = &keymaps.first;
 
-	for (int i = 0; i < 2; i++) {
-		key->vtable = (void *)0x85844C;
-		key->bindings.index = getInputManagerIndex(i + 2);
-		if (key->bindings.index < 0)
-			key->bindings.index = 0xFF;
-		memcpy(&key->bindings.up, &((key->bindings.index & 0x80) ? profiles[2 + i]->keyboardBindings : profiles[2 + i]->controllerBindings).up, sizeof(key->bindings) - 4);
-		key++;
+		for (int i = 0; i < 2; i++) {
+			key->vtable = (void *)0x85844C;
+			key->bindings.index = getInputManagerIndex(i + 2);
+			if (key->bindings.index < 0)
+				key->bindings.index = 0xFF;
+			memcpy(&key->bindings.up, &((key->bindings.index & 0x80) ? profiles[2 + i]->keyboardBindings : profiles[2 + i]->controllerBindings).up, sizeof(key->bindings) - 4);
+			key++;
+		}
+		keys.first.keymapManager = &keymaps.first;
+		keys.second.keymapManager = &keymaps.second;
+	} else if (SokuLib::mainMode == SokuLib::BATTLE_MODE_VSSERVER) {
+		keys.first.keymapManager = &extraOnlineInputs[0];
+		keys.second.keymapManager = &extraOnlineInputs[1];
 	}
+	return g;
 }
 
 void __fastcall onDeath(SokuLib::CharacterManager *This)
@@ -1693,7 +1868,10 @@ SokuLib::Select *__fastcall CSelect_construct(SokuLib::Select *This)
 		ret = 0;
 
 		dat.needInit = true;
-		dat.input = nullptr;
+		if (*reinterpret_cast<SokuLib::NetObject **>(SokuLib::ADDR_PNETOBJECT))
+			dat.input = &extraOnlineInputs[i];
+		else
+			dat.input = nullptr;
 		dat.object = nullptr;
 		dat.selectState = 0;
 		dat.chrHandler.maxValue = 20;
@@ -1990,7 +2168,13 @@ void __fastcall renderChrSelectChrName(SokuLib::Select *This, int index)
 
 void __fastcall renderChrSelectProfile(int index)
 {
-	profiles[index + 2]->sprite.render(chrSelectExtra[index].profileBack->x2 + 88, chrSelectExtra[index].profileBack->y2 + 10);
+	auto *netObject = *reinterpret_cast<SokuLib::NetObject **>(SokuLib::ADDR_PNETOBJECT);
+
+	if (netObject == nullptr) {
+		profiles[index + 2]->sprite.render(chrSelectExtra[index].profileBack->x2 + 88, chrSelectExtra[index].profileBack->y2 + 10);
+		return;
+	}
+	extraNetProfileNames[index].render(chrSelectExtra[index].profileBack->x2 + 88, chrSelectExtra[index].profileBack->y2 + 10);
 }
 
 void __declspec(naked) renderChrSelectChrData_hook()
@@ -2157,7 +2341,7 @@ void updateCharacterSelect2(SokuLib::Select *This, unsigned i)
 	case 0:
 		dat.chrHandler.axis = &dat.input->input.horizontalAxis;
 		if (InputHandler_HandleInput(dat.chrHandler)) {
-			SokuLib::playSEWaveBuffer(0x27);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 			info.character = *((SokuLib::Character *(__thiscall *)(const void *, int))0x420380)(&This->offset_0x018[0x80], dat.chrHandler.pos);
 			sprintf(buffer, (char *)0x85785C, info.character);
 			SokuLib::textureMgr.deallocate(dat.portraitTexture);
@@ -2172,7 +2356,7 @@ void updateCharacterSelect2(SokuLib::Select *This, unsigned i)
 		if (dat.input->input.a == 1) {
 			char *name = getCharName(info.character);
 
-			SokuLib::playSEWaveBuffer(0x28);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 			dat.selectState = 1;
 			changePalette(This, i + 2, info.palette, true);
 			sprintf(buffer, (char *)0x8578EC, info.character);
@@ -2194,7 +2378,7 @@ void updateCharacterSelect2(SokuLib::Select *This, unsigned i)
 			dat.deckHandler.maxValue = loadedDecks[2 + i][info.character].size() + 3;
 		} else if (dat.input->input.b == 1) {
 		} else if (dat.input->input.d == 1) {
-			SokuLib::playSEWaveBuffer(0x28);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 			dat.selectState = 3;
 			info.character = SokuLib::CHARACTER_RANDOM;
 			dat.charNameCounter = 15;
@@ -2204,14 +2388,14 @@ void updateCharacterSelect2(SokuLib::Select *This, unsigned i)
 		dat.palHandler.axis = &dat.input->input.verticalAxis;
 		dat.deckHandler.axis = &dat.input->input.horizontalAxis;
 		if (InputHandler_HandleInput(dat.deckHandler))
-			SokuLib::playSEWaveBuffer(0x27);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 		if (InputHandler_HandleInput(dat.palHandler)) {
 			char *name = getCharName(info.character);
 			int poseId = dat.object->frameState.poseId;
 			int poseFrame = dat.object->frameState.poseFrame;
 
 			changePalette(This, i + 2, dat.palHandler.pos, *dat.palHandler.axis > 0);
-			SokuLib::playSEWaveBuffer(0x27);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 			((void (__thiscall *)(CEffectManager *))dat.effectMgr.vtable[2])(&dat.effectMgr);
 			// data/character/%s/palette%d.bmp
 			sprintf(buffer, (char *)0x8578C8, name, info.palette);
@@ -2224,16 +2408,16 @@ void updateCharacterSelect2(SokuLib::Select *This, unsigned i)
 			dat.object->frameState.poseFrame = poseFrame;
 		}
 		if (dat.input->input.a == 1) {
-			SokuLib::playSEWaveBuffer(0x28);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 			dat.object->setAction(1);
 			dat.selectState = 3;
 		} else if (dat.input->input.b == 1) {
-			SokuLib::playSEWaveBuffer(0x29);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
 			dat.selectState = 0;
 		}
 	case 3:
 		if (dat.input->input.b == 1) {
-			SokuLib::playSEWaveBuffer(0x29);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
 			dat.selectState = 0;
 			if (info.character == SokuLib::CHARACTER_RANDOM) {
 				info.character = *((SokuLib::Character *(__thiscall *)(const void *, int))0x420380)(&This->offset_0x018[0x80], dat.chrHandler.pos);
@@ -2292,8 +2476,13 @@ void __declspec(naked) onStageSelectCancel_hook()
 
 void onCharacterSelectInit()
 {
-	chrSelectExtraInputs[0] = nullptr;
-	chrSelectExtraInputs[1] = nullptr;
+	if (*reinterpret_cast<SokuLib::NetObject **>(SokuLib::ADDR_PNETOBJECT)) {
+		chrSelectExtraInputs[0] = &extraOnlineInputs[0];
+		chrSelectExtraInputs[1] = &extraOnlineInputs[1];
+	} else {
+		chrSelectExtraInputs[0] = nullptr;
+		chrSelectExtraInputs[1] = nullptr;
+	}
 }
 
 int __fastcall CTitle_OnProcess(SokuLib::Title *This)
@@ -2412,7 +2601,7 @@ void openRenameBox(SokuLib::ProfileDeckEdit *This)
 	auto setup_global = (int(__thiscall*) (void*, bool))0x40ea10;
 	auto init_fun = (void(__thiscall*) (void*, int, int))0x429e70;
 
-	SokuLib::playSEWaveBuffer(0x28);
+	SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 	if (editSelectedDeck == editedDecks.size() - 1) {
 		editedDecks.back().name = "Deck #" + std::to_string(editedDecks.size());
 		editedDecks.push_back({"Create new deck", {21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21}});
@@ -2431,9 +2620,9 @@ void renameBoxUpdate(SokuLib::KeyManager *keys)
 
 	renameBoxDisplayed = *(bool *)0x8A0CFF;
 	if (!renameBoxDisplayed)
-		SokuLib::playSEWaveBuffer(0x29);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
 	else if (update(editingBoxObject) == 1) {
-		SokuLib::playSEWaveBuffer(0x28);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 		editedDecks[editSelectedDeck].name = (char *)0x8A02F8;
 		renameBoxDisplayed = false;
 	}
@@ -2496,7 +2685,7 @@ void deleteBoxRender()
 
 void openDeleteBox()
 {
-	SokuLib::playSEWaveBuffer(0x28);
+	SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 	deleteBoxDisplayed = true;
 	deleteBoxSelectedItem = 0;
 }
@@ -2512,20 +2701,20 @@ void deleteBoxUpdate(SokuLib::KeyManager *keys)
 		return;
 	}
 	if (keys->keymapManager->input.b || SokuLib::checkKeyOneshot(1, false, false, false)) {
-		SokuLib::playSEWaveBuffer(0x29);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
 		deleteBoxDisplayed = false;
 	}
 	if (horizontal == 1 || (horizontal >= 36 && horizontal % 6 == 0)) {
 		deleteBoxSelectedItem = !deleteBoxSelectedItem;
-		SokuLib::playSEWaveBuffer(0x27);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 	}
 	if (keys->keymapManager->input.a == 1) {
 		if (deleteBoxSelectedItem) {
 			editedDecks.erase(editedDecks.begin() + editSelectedDeck);
 			loadDeckToGame(SokuLib::getMenuObj<SokuLib::ProfileDeckEdit>(), editedDecks[editSelectedDeck].cards);
-			SokuLib::playSEWaveBuffer(0x28);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 		} else
-			SokuLib::playSEWaveBuffer(0x29);
+			SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
 		deleteBoxSelectedItem = 2;
 	}
 }
@@ -2590,7 +2779,7 @@ void copyBoxRender()
 
 void openCopyBox(SokuLib::ProfileDeckEdit *This)
 {
-	SokuLib::playSEWaveBuffer(0x28);
+	SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 	copyBoxDisplayed = true;
 	copyBoxSelectedItem = 0;
 }
@@ -2598,7 +2787,7 @@ void openCopyBox(SokuLib::ProfileDeckEdit *This)
 void copyBoxUpdate(SokuLib::KeyManager *keys)
 {
 	if (keys->keymapManager->input.b || SokuLib::checkKeyOneshot(1, false, false, false)) {
-		SokuLib::playSEWaveBuffer(0x29);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
 		copyBoxDisplayed = false;
 	}
 
@@ -2617,7 +2806,7 @@ void copyBoxUpdate(SokuLib::KeyManager *keys)
 			else
 				copyBoxSelectedItem++;
 		}
-		SokuLib::playSEWaveBuffer(0x27);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_MOVE);
 	}
 	if (keys->keymapManager->input.a == 1) {
 		auto menu = SokuLib::getMenuObj<SokuLib::ProfileDeckEdit>();
@@ -2764,6 +2953,107 @@ static void reloadProfiles()
 	reloadProfile(profiles[3], "profile4p.pf", 0xFF, 0x80, 0x80);
 }
 
+static void loadExtraAssets()
+{
+	SokuLib::Vector2i size;
+	const char *cursorSprites[] = {
+		"data/scene/select/character/04c_cursor1p.bmp",
+		"data/scene/select/character/04c_cursor2p.bmp",
+		"data/scene/select/character/04c_cursor3p.bmp",
+		"data/scene/select/character/04c_cursor4p.bmp"
+	};
+	const char *cursorSprites2[] = {
+		"data/scene/select/character/04b_cursor1p.bmp",
+		"data/scene/select/character/04b_cursor2p.bmp",
+		"data/scene/select/character/04b_cursor3p.bmp",
+		"data/scene/select/character/04b_cursor4p.bmp"
+	};
+	const char *healingSprites[] = {
+		"data/character/common/breakEF_in002.bmp",
+		"data/character/common/breakEF_out002.bmp"
+	};
+	SokuLib::SWRFont font;
+	SokuLib::FontDescription desc;
+
+	desc.r1 = 255;
+	desc.r2 = 255;
+	desc.g1 = 255;
+	desc.g2 = 255;
+	desc.b1 = 255;
+	desc.b2 = 255;
+	desc.height = FONT_HEIGHT;
+	desc.weight = FW_BOLD;
+	desc.italic = 0;
+	desc.shadow = 2;
+	desc.bufferSize = 1000000;
+	desc.charSpaceX = 0;
+	desc.charSpaceY = 0;
+	desc.offsetX = 0;
+	desc.offsetY = 0;
+	desc.useOffset = 0;
+	strcpy(desc.faceName, SokuLib::defaultFontName);
+	font.create();
+	font.setIndirect(desc);
+
+	for (int i = 0; i < 4; i++) {
+		cursors[i].texture.loadFromGame(cursorSprites[i]);
+		cursors[i].setSize(cursors[i].texture.getSize());
+		cursors[i].rect.width = cursors[i].getSize().x;
+		cursors[i].rect.height = cursors[i].getSize().y;
+	}
+	for (int i = 0; i < 4; i++) {
+		cursors2[i].texture.loadFromGame(cursorSprites2[i]);
+		cursors2[i].setSize(cursors2[i].texture.getSize());
+		cursors2[i].rect.width = cursors2[i].texture.getSize().x;
+		cursors2[i].rect.height = cursors2[i].texture.getSize().y;
+	}
+	for (int i = 0; i < 2; i++) {
+		healingCircle[i].texture.loadFromGame(healingSprites[i]);
+		healingCircle[i].setSize({HEAL_RADIUS * 2, HEAL_RADIUS * 2});
+		healingCircle[i].rect.width = healingCircle[i].texture.getSize().x;
+		healingCircle[i].rect.height = healingCircle[i].texture.getSize().y;
+		healingCircle[i].setCamera(&SokuLib::camera);
+	}
+
+	inputsSheet.texture.loadFromGame("data/number/inputs.bmp");
+	inputsSheet.setSize({24, 24});
+	inputsSheet.rect.width = 24;
+	inputsSheet.rect.height = 24;
+
+	numbersSheet.texture.loadFromGame("data/number/0000.bmp");
+	numbersSheet.setSize({14, 19});
+	numbersSheet.rect.width = 14;
+	numbersSheet.rect.height = 19;
+
+	chooseBoxBack.texture.loadFromGame("data/menu/21_base.bmp");
+	chooseBoxBack.setSize(chooseBoxBack.texture.getSize());
+	chooseBoxBack.rect.width = chooseBoxBack.getSize().x;
+	chooseBoxBack.rect.height = chooseBoxBack.getSize().y;
+	chooseBoxBack.setPosition({
+		static_cast<int>(320 - (chooseBoxBack.getSize().x - 12) / 2),
+		static_cast<int>(240 - (chooseBoxBack.getSize().y - 12) / 2),
+	});
+
+	chooseBoxText.texture.createFromText("Select player slot: ", font, chooseBoxBack.getSize(), &size);
+	chooseBoxText.setSize(size.to<unsigned>());
+	chooseBoxText.rect.width = size.x;
+	chooseBoxText.rect.height = size.y;
+	chooseBoxText.setPosition({
+		chooseBoxBack.getPosition().x + 10,
+		240 - size.y / 2
+	});
+
+	chooseBoxWaitText.texture.createFromText("Waiting for players...   ", font, chooseBoxBack.getSize(), &size);
+	chooseBoxWaitText.setSize(size.to<unsigned>());
+	chooseBoxWaitText.rect.width = size.x;
+	chooseBoxWaitText.rect.height = size.y;
+	chooseBoxWaitText.setPosition({
+		chooseBoxBack.getPosition().x + 10,
+		240 - size.y / 2
+	});
+	font.destruct();
+}
+
 static void initAssets()
 {
 	if (assetsLoaded)
@@ -2772,6 +3062,7 @@ static void initAssets()
 	loadAllExistingCards();
 	loadDefaultDecks();
 	loadCardAssets();
+	loadExtraAssets();
 	loadProfile("profile3p.txt", profiles[2], "profile3p", 0xA0, 0xA0, 0xFF);
 	loadProfile("profile4p.txt", profiles[3], "profile4p", 0xFF, 0x80, 0x80);
 }
@@ -2828,7 +3119,7 @@ int __fastcall CProfileDeckEdit_OnProcess(SokuLib::ProfileDeckEdit *This)
 		escPressed = ((int *)0x8998D8)[1];
 		((int *)0x8998D8)[1] = 0;
 	} else if (editSelectedDeck == editedDecks.size() - 1 && This->displayedNumberOfCards != 0) {
-		SokuLib::playSEWaveBuffer(0x28);
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
 		editedDecks.back().name = "Deck #" + std::to_string(editedDecks.size());
 		editedDecks.push_back({"Create new deck", {21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21, 21}});
 	}
@@ -3486,7 +3777,313 @@ void __declspec(naked) swapComboCtrs()
 	}
 }
 
-extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule) {
+void resetOnlineCharacterSelect()
+{
+	extraOnlineInputsBuffer[0].clear();
+	extraOnlineInputsBuffer[1].clear();
+	characterSelectLocked = true;
+	mySlot = -1;
+	remoteMySlot = -1;
+	selectedSlot = 0;
+	slotsTaken[0] = false;
+	slotsTaken[1] = false;
+	slotsTaken[2] = false;
+	slotsTaken[3] = false;
+}
+
+void __declspec(naked) copyExtraProfileNames()
+{
+	__asm {
+		LEA EDI, [extraOnlineNames]
+		MOV ECX, 0x10
+		REP MOVSD
+		PUSH EAX
+		CALL resetOnlineCharacterSelect
+		POP EAX
+		MOV EDX, dword ptr [EAX + 0xFFFFF960]
+		RET
+	}
+}
+
+void reloadNetProfileTexture(int index)
+{
+	SokuLib::SWRFont font;
+	SokuLib::FontDescription desc;
+
+	desc.r1 = 255;
+	desc.r2 = 255;
+	desc.g1 = 255;
+	desc.g2 = 255;
+	desc.b1 = 255;
+	desc.b2 = 255;
+	desc.weight = FW_NORMAL;
+	desc.italic = 0;
+	desc.shadow = 1;
+	desc.bufferSize = 1000000;
+	desc.charSpaceX = 0;
+	desc.charSpaceY = 2;
+	desc.offsetX = 0;
+	desc.offsetY = 0;
+	desc.useOffset = 0;
+
+	strcpy(desc.faceName, *(char **)0x453BFA);
+	if (index % 2 == 0) {
+		desc.r2 = 0xA0;
+		desc.g2 = 0xA0;
+	} else {
+		desc.g2 = 0x80;
+		desc.b2 = 0x80;
+	}
+
+	int r = 0;
+	int old = 0;
+	int *final;
+	const char *name;
+	SokuLib::Sprite *sprite;
+	size_t size;
+
+	if (index < 2) {
+		auto &netObject = SokuLib::getNetObject();
+
+		name = netObject.profile1name + (index * 32);
+		sprite = &netObject.p1ProfileNameSprite + index;
+		final = &netObject.p1ProfileNameTexture + index;
+	} else {
+		name = extraOnlineNames[index - 2];
+		sprite = &extraNetProfileNames[index - 2];
+		final = &extraNetProfileNamesTextures[index - 2];
+	}
+	size = strlen(name);
+	if (memcmp(emptyMagicString, name, 32) == 0) {
+		name = emptyName;
+		size = strlen("[Empty Slot]");
+		slotsTaken[index] = false;
+	} else
+		slotsTaken[index] = true;
+
+	int v = ((int)size - 16) / 2;
+
+	v = v & (v < 0) - 1;
+	desc.height = 14 - v;
+	desc.offsetY = v / 2;
+
+	font.create();
+	font.setIndirect(desc);
+	old = *final;
+	SokuLib::textureMgr.createTextTexture(&r, name, font, 0x80, 0x20, nullptr, nullptr);
+	sprite->setTexture2(r, 0, 0, 0x80, 0x20);
+	*final = r;
+	if (old)
+		SokuLib::textureMgr.remove(old);
+	font.destruct();
+}
+
+void __declspec(naked) inputMul4()
+{
+	__asm {
+		ADD ESI, ESI
+		ADD ESI, ESI
+		CMP ESI, dword ptr [EDI + 0x20]
+		RET
+	}
+}
+
+void pushOnlineInputs(SokuLib::Deque<unsigned short> &base, SokuLib::NetObject &obj, int index)
+{
+	obj.p1Inputs.push_back(base.at(index + 0));
+	obj.p2Inputs.push_back(base.at(index + 1));
+	extraOnlineInputsBuffer[0].push_back(base.at(index + 2));
+	extraOnlineInputsBuffer[1].push_back(base.at(index + 3));
+}
+
+void __fastcall updateExtraInputHandlers(void *This)
+{
+	const auto fct = (void (__thiscall *)(void *))0x4549F0;
+	auto &netObj = SokuLib::getNetObject();
+
+	fct(This);
+	extraOnlineInputs[0].inKeys.raw = extraOnlineInputsBuffer[0].front();
+	extraOnlineInputsBuffer[0].pop_front();
+	extraOnlineInputs[1].inKeys.raw = extraOnlineInputsBuffer[1].front();
+	extraOnlineInputsBuffer[1].pop_front();
+	replayInputs.push_back({
+		netObj.p1InputMgr.inKeys,
+		netObj.p2InputMgr.inKeys,
+		extraOnlineInputs[0].inKeys,
+		extraOnlineInputs[1].inKeys
+	});
+}
+
+void __fastcall onInputsReset(void *This)
+{
+	og_FUNCALL43F996(This);
+	extraOnlineInputsBuffer[0].clear();
+	extraOnlineInputsBuffer[1].clear();
+	replayInputs.clear();
+}
+
+constexpr auto __keyManagerSize = sizeof(*extraOnlineInputs);
+
+void __declspec(naked) updateExtraOnlineInputs()
+{
+	__asm {
+		MOV EDX, dword ptr [EAX + 0x4]
+		CALL EDX
+		LEA ECX, dword ptr [extraOnlineInputs]
+		MOV EAX, dword ptr [ECX]
+		MOV EDX, dword ptr [EAX + 0x4]
+		CALL EDX
+		MOV ECX, [__keyManagerSize]
+		LEA ECX, dword ptr [extraOnlineInputs + ECX]
+		MOV EAX, dword ptr [ECX]
+		MOV EDX, dword ptr [EAX + 0x4]
+		JMP EDX
+	}
+}
+
+void __fastcall handlePlayerJoinPacket(PacketPlayerJoin &packet, size_t packetSize)
+{
+	if (packetSize < sizeof(packet))
+		return;
+	if (packet.slot == -1) {
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_NETBELL);
+		printf("%s joined.\n", packet.name);
+		return;
+	}
+	if (packet.slot < -1 || packet.slot > 3)
+		return;
+
+	char *name;
+
+	if (packet.slot < 2)
+		name = SokuLib::getNetObject().profile1name + (packet.slot * 32);
+	else
+		name = extraOnlineNames[packet.slot - 2];
+	if (packet.slot == mySlot && mySlot != remoteMySlot)
+		mySlot = -2;
+	if (memcmp(packet.name, emptyMagicString, 32) == 0) {
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CANCEL);
+		characterSelectLocked = true;
+	} else
+		SokuLib::playSEWaveBuffer(SokuLib::SFX_MENU_CONFIRM);
+	memcpy(name, packet.name, sizeof(packet.name));
+	reloadNetProfileTexture(packet.slot);
+}
+
+void __fastcall handlePlayerJoinAckPacket(PacketPlayerJoinAck &packet, size_t packetSize)
+{
+	if (packetSize < sizeof(packet))
+		return;
+	if (packet.slot < -1 || packet.slot > 3)
+		return;
+	if (packet.slot >= 0)
+		slotsTaken[packet.slot] = true;
+	mySlot = packet.slot;
+	remoteMySlot = packet.slot;
+}
+
+void handleUnlockCharSelectPacket()
+{
+	characterSelectLocked = false;
+}
+
+void __declspec(naked) handlePlayerJoinPacket_hook()
+{
+	__asm {
+		LEA ECX, [ESP + 0x70]
+		MOV EDX, [ESP + 0x14]
+		PUSH 0x41DFC2
+		JMP handlePlayerJoinPacket
+	}
+}
+
+void __declspec(naked) handlePlayerJoinAckPacket_hook()
+{
+	__asm {
+		LEA ECX, [ESP + 0x70]
+		MOV EDX, [ESP + 0x14]
+		PUSH 0x41DFC2
+		JMP handlePlayerJoinAckPacket
+	}
+}
+
+void __declspec(naked) handleUnlockCharSelectPacket_hook()
+{
+	__asm {
+		PUSH 0x41DFC2
+		JMP handleUnlockCharSelectPacket
+	}
+}
+
+void sendCurrentSelectCharacter()
+{
+	auto &netobj = SokuLib::getNetObject();
+	SokuLib::PlayerInfo *info = nullptr;
+
+	generateFakeDecks();
+	switch (mySlot) {
+	case 0:
+		info = &SokuLib::leftPlayerInfo;
+		break;
+	case 1:
+		info = &SokuLib::rightPlayerInfo;
+		break;
+	case 2:
+		info = &assists.first;
+		break;
+	case 3:
+		info = &assists.second;
+		break;
+	}
+
+	size_t size = sizeof(PacketLoadingReady) + info->effectiveDeck.size() * sizeof(unsigned short);
+	char *buffer = new char[size];
+	auto *packet = (PacketLoadingReady *)buffer;
+
+	packet->type = LOADING_READY;
+	packet->stage = SokuLib::gameParams.stageId;
+	packet->music = SokuLib::gameParams.musicId;
+	packet->skinId = info->palette;
+	packet->deckId = info->deck;
+	packet->hasSimulButtons = profiles[0]->hasSimulButtonsOff;
+	packet->chr = static_cast<SokuLib::CharacterPacked>(info->character);
+	packet->deckSize = info->effectiveDeck.size();
+	for (size_t i = 0; i < info->effectiveDeck.size(); i++)
+		packet->deck[i] = info->effectiveDeck[i];
+	SokuLib::DLL::ws2_32.sendto(netobj.netUdp.socket, (char *)packet, size, 0, (sockaddr *)&netobj.netUdp.opponent, sizeof(netobj.netUdp.opponent));
+	delete[] buffer;
+}
+
+void parseExtraChrsGameMatch(SokuLib::PlayerMatchData *ptr)
+{
+	auto *infos = &assists.first;
+
+	for (int j = 0; j < 2; j++) {
+		infos->character = static_cast<SokuLib::Character>(ptr->character);
+		infos->palette = ptr->skinId;
+		infos->deck = ptr->deckId;
+		infos->effectiveDeck.clear();
+		for (unsigned i = 0; i < ptr->deckSize; i++)
+			infos->effectiveDeck.push_back(ptr->cards[i]);
+		ptr = (SokuLib::PlayerMatchData *)ptr->getEndPtr();
+		infos++;
+	}
+}
+
+void __declspec(naked) parseExtraChrsGameMatch_hook()
+{
+	__asm {
+		PUSH ESI
+		CALL parseExtraChrsGameMatch
+		POP ESI
+		MOVZX EAX, byte ptr [ESI]
+		MOV byte ptr [EBX + 0x3a], AL
+		RET
+	}
+}
+
+extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hParentModule)
+{
 	DWORD old;
 
 #ifdef _DEBUG
@@ -3497,6 +4094,11 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	freopen_s(&_, "CONOUT$", "w", stderr);
 #endif
 
+	const uint8_t versionString2v2[] = {
+		0x41, 0xD0, 0x3B, 0x30, 0x64, 0x41, 0x74, 0xC8,
+		0xC6, 0x24, 0x8C, 0xA4, 0x15, 0x44, 0x32, 0x96
+	};
+
 	myModule = hMyModule;
 	GetModuleFileName(hMyModule, modFolder, 1024);
 	PathRemoveFileSpec(modFolder);
@@ -3506,17 +4108,16 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	::VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
 	s_originalBattleMgrOnRender          = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onRender,    CBattleManager_OnRender);
 	s_originalBattleMgrOnProcess         = SokuLib::TamperDword(&SokuLib::VTable_BattleManager.onProcess,   CBattleManager_OnProcess);
-	s_originalSelectOnProcess            = SokuLib::TamperDword(&SokuLib::VTable_Select.onProcess,          CSelect_OnProcess);
+	s_originalSelectOnProcess            = SokuLib::TamperDword(&SokuLib::VTable_Select.update,             CSelect_OnProcess);
 	s_originalSelectOnRender             = SokuLib::TamperDword(&SokuLib::VTable_Select.onRender,           CSelect_OnRender);
-	s_originalSelectClientOnProcess      = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onProcess,    CSelectCL_OnProcess);
+	s_originalSelectClientOnProcess      = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.update,       CSelectCL_OnProcess);
 	s_originalSelectClientOnRender       = SokuLib::TamperDword(&SokuLib::VTable_SelectClient.onRender,     CSelectCL_OnRender);
-	s_originalSelectServerOnProcess      = SokuLib::TamperDword(&SokuLib::VTable_SelectServer.onProcess,    CSelectSV_OnProcess);
-	s_originalSelectServerOnRender       = SokuLib::TamperDword(&SokuLib::VTable_SelectServer.onRender,     CSelectSV_OnRender);
 	s_originalTitleOnProcess             = SokuLib::TamperDword(&SokuLib::VTable_Title.onRender,            CTitle_OnProcess);
 	s_originalCProfileDeckEdit_OnProcess = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onProcess, CProfileDeckEdit_OnProcess);
 	s_originalCProfileDeckEdit_OnRender  = SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onRender,  CProfileDeckEdit_OnRender);
 	s_originalCProfileDeckEdit_Destructor= SokuLib::TamperDword(&SokuLib::VTable_ProfileDeckEdit.onDestruct,CProfileDeckEdit_Destructor);
 	s_ogHudRender = (int (__thiscall *)(void *))SokuLib::TamperDword(0x85b544, onHudRender);
+	memcpy((void *)0x858B80, versionString2v2, sizeof(versionString2v2));
 	::VirtualProtect((PVOID)RDATA_SECTION_OFFSET, RDATA_SECTION_SIZE, old, &old);
 
 	::VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
@@ -3795,6 +4396,72 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	//0047e2d9 89 44 b4 24     MOV        dword ptr [ESP + ESI*0x4 + 0x24]=>local_4,EAX
 	memset((void *)0x47E2C0, 0x90, 0x47E2DD - 0x47E2C0);
 	SokuLib::TamperNearCall(0x47E2C4, swapComboCtrs);
+
+	// Netplay support
+	SokuLib::TamperNearCall(0x4547AA, copyExtraProfileNames);
+	*(char *)0x4547AF = 0x90;
+
+	// PUSH 0
+	// CALL reloadNetProfileTexture
+	// PUSH 1
+	// CALL reloadNetProfileTexture
+	// PUSH 2
+	// CALL reloadNetProfileTexture
+	// PUSH 3
+	// CALL reloadNetProfileTexture
+	// ADD ESP, 16
+	// JMP 0x453E53
+	*(unsigned short *)0x453B8D = 0x006A;
+	SokuLib::TamperNearCall(0x453B8F, reloadNetProfileTexture);
+	*(unsigned short *)0x453B94 = 0x016A;
+	SokuLib::TamperNearCall(0x453B96, reloadNetProfileTexture);
+	*(unsigned short *)0x453B9B = 0x026A;
+	SokuLib::TamperNearCall(0x453B9D, reloadNetProfileTexture);
+	*(unsigned short *)0x453BA2 = 0x036A;
+	SokuLib::TamperNearCall(0x453BA4, reloadNetProfileTexture);
+	*(unsigned short *)0x453BA9 = 0xC483;
+	*(unsigned char *)0x453BAB = 16;
+	*(char *)0x453BAC = 0xE9;
+	*(unsigned *)0x453BAD = 0x02A2;
+
+	SokuLib::TamperNearCall(0x454D6A, inputMul4);
+	*(unsigned short *)0x454D81 = 0xEB8B;
+	*(unsigned int *)0x454D83 = 0x90909090;
+	memset((void *)0x454D9B, 0x90, 0x454DD9 - 0x454D9B);
+	// SUB ESI, 4
+	// PUSH ESI
+	// PUSH EBP
+	// PUSH EDI
+	// CALL pushOnlineInputs
+	// ADD ESP, 12
+	*(char *)0x454D9B = 0x83;
+	*(char *)0x454D9C = 0xee;
+	*(char *)0x454D9D = 0x04;
+	*(char *)0x454D9E = 0x56;
+	*(char *)0x454D9F = 0x55;
+	*(char *)0x454DA0 = 0x57;
+	SokuLib::TamperNearCall(0x454DA1, pushOnlineInputs);
+	*(unsigned short *)0x454DA6 = 0xC483;
+	*(unsigned char *)0x454DA8 = 12;
+
+	SokuLib::TamperNearJmpOpr(0x454BEA, updateExtraInputHandlers);
+	SokuLib::TamperNearCall(0x4287DF, updateExtraOnlineInputs);
+
+	*(void **)0x41E010 = handlePlayerJoinPacket_hook;
+	*(void **)0x41E014 = handlePlayerJoinAckPacket_hook;
+	*(void **)0x41E01C = handleUnlockCharSelectPacket_hook;
+
+	new SokuLib::Trampoline(0x428789, sendCurrentSelectCharacter, 5);
+	SokuLib::TamperNearCall(0x45409A, parseExtraChrsGameMatch_hook);
+	*(char *)0x45409F = 0x90;
+	og_FUNCALL43F996 = SokuLib::TamperNearJmpOpr(0x43F996, onInputsReset);
+
+	// Return SELECTCL, instead of SELECTSV
+	*(char *)0x4286C5 = SokuLib::SCENE_SELECTCL;
+
+	// Enable select key
+	*(unsigned short *)0x454CD6 = 0b101111111111;
+	*(unsigned short *)0x454CC2 = 0b101111111111;
 
 
 	og_handleInputs = SokuLib::TamperNearJmpOpr(0x48224D, handlePlayerInputs);
