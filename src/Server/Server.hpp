@@ -66,6 +66,8 @@ private:
 		bool hasSimulButtons;
 		std::vector<unsigned short> deck;
 		GameStateStep state = JOINING;
+
+		SokuLib::Inputs getInput(unsigned frame);
 	};
 
 	struct GameState {

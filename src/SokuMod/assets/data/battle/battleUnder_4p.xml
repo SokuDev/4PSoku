@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layout version="4">
+	<static id="0" xposition="-4" yposition="415" mirror="0">
+		<image name="underObjB.bmp" xposition="7" yposition="32" width="141" height="31"/>
+	</static>
+	<static id="0" xposition="644" yposition="415" mirror="1">
+		<image name="underObjB.bmp" xposition="7" yposition="32" width="141" height="31"/>
+	</static>
+	<static id="200" xposition="10" yposition="392" mirror="0">
+		<image name="cardGaugeBigB.bmp" xposition="0" yposition="0" width="45" height="70"/>
+	</static>
+	<static id="205" xposition="10" yposition="392" mirror="0">
+		<image name="cardGaugeBigB.bmp" xposition="0" yposition="0" width="45" height="70"/>
+	</static>
+	<slidervert id="120" xposition="12" yposition="395" mirror="0">
+		<image name="cardBarBigB.bmp" xposition="0" yposition="0" width="41" height="65"/>
+	</slidervert>
+	<static id="140" xposition="12" yposition="395" mirror="0">
+		<image name="cardFaceDown.bmp" xposition="0" yposition="0" width="41" height="65"/>
+	</static>
+	<static id="204" xposition="120" yposition="437" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="209" xposition="120" yposition="437" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="124" xposition="122" yposition="440" mirror="0">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="144" xposition="122" yposition="440" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="203" xposition="99" yposition="433" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="208" xposition="99" yposition="433" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="123" xposition="101" yposition="436" mirror="0">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="143" xposition="101" yposition="436" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="202" xposition="78" yposition="429" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="207" xposition="78" yposition="429" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="122" xposition="80" yposition="432" mirror="0">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="142" xposition="80" yposition="432" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="201" xposition="57" yposition="425" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="206" xposition="57" yposition="425" mirror="0">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="121" xposition="59" yposition="428" mirror="0">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="141" xposition="59" yposition="428" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="210" xposition="630" yposition="392" mirror="1">
+		<image name="cardGaugeBigB.bmp" xposition="0" yposition="0" width="45" height="70"/>
+	</static>
+	<static id="215" xposition="630" yposition="392" mirror="1">
+		<image name="cardGaugeBigB.bmp" xposition="0" yposition="0" width="45" height="70"/>
+	</static>
+	<slidervert id="130" xposition="628" yposition="395" mirror="1">
+		<image name="cardBarBigB.bmp" xposition="0" yposition="0" width="41" height="65"/>
+	</slidervert>
+	<static id="150" xposition="587" yposition="395" mirror="0">
+		<image name="cardFaceDown.bmp" xposition="0" yposition="0" width="41" height="65"/>
+	</static>
+	<static id="214" xposition="520" yposition="437" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="219" xposition="520" yposition="437" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="134" xposition="518" yposition="440" mirror="1">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="154" xposition="501" yposition="440" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="213" xposition="541" yposition="433" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="218" xposition="541" yposition="433" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="133" xposition="539" yposition="436" mirror="1">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="153" xposition="522" yposition="436" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="212" xposition="562" yposition="429" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="217" xposition="562" yposition="429" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="132" xposition="560" yposition="432" mirror="1">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="152" xposition="543" yposition="432" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="211" xposition="583" yposition="425" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<static id="216" xposition="583" yposition="425" mirror="1">
+		<image name="cardGaugeSmallB.bmp" xposition="0" yposition="0" width="21" height="32"/>
+	</static>
+	<slidervert id="131" xposition="581" yposition="428" mirror="1">
+		<image name="cardBarSmallB.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</slidervert>
+	<static id="151" xposition="564" yposition="428" mirror="0">
+		<image name="cardFaceDownSmall.bmp" xposition="0" yposition="0" width="17" height="27"/>
+	</static>
+	<static id="60" xposition="263" yposition="439" mirror="0">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="61" xposition="236" yposition="446" mirror="0">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="62" xposition="209" yposition="439" mirror="0">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="63" xposition="182" yposition="446" mirror="0">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="64" xposition="155" yposition="439" mirror="0">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<sliderhorz id="20" xposition="267" yposition="442" mirror="0">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="21" xposition="240" yposition="449" mirror="0">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="22" xposition="213" yposition="442" mirror="0">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="23" xposition="186" yposition="449" mirror="0">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="24" xposition="159" yposition="442" mirror="0">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<static id="40" xposition="266" yposition="441" mirror="0">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="41" xposition="239" yposition="448" mirror="0">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="42" xposition="212" yposition="441" mirror="0">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="43" xposition="185" yposition="448" mirror="0">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="44" xposition="158" yposition="441" mirror="0">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="80" xposition="263" yposition="439" mirror="0">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="81" xposition="236" yposition="446" mirror="0">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="82" xposition="209" yposition="439" mirror="0">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="83" xposition="182" yposition="446" mirror="0">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="84" xposition="155" yposition="439" mirror="0">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<slidervert id="100" xposition="267" yposition="442" mirror="0">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="101" xposition="240" yposition="449" mirror="0">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="102" xposition="213" yposition="442" mirror="0">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="103" xposition="186" yposition="449" mirror="0">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="104" xposition="159" yposition="442" mirror="0">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<static id="70" xposition="377" yposition="439" mirror="1">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="71" xposition="404" yposition="446" mirror="1">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="72" xposition="431" yposition="439" mirror="1">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="73" xposition="458" yposition="446" mirror="1">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="74" xposition="485" yposition="439" mirror="1">
+		<image name="borderGaugeB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<sliderhorz id="30" xposition="373" yposition="442" mirror="1">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="31" xposition="400" yposition="449" mirror="1">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="32" xposition="427" yposition="442" mirror="1">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="33" xposition="454" yposition="449" mirror="1">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<sliderhorz id="34" xposition="481" yposition="442" mirror="1">
+		<image name="borderBarB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</sliderhorz>
+	<static id="50" xposition="374" yposition="441" mirror="1">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="51" xposition="401" yposition="448" mirror="1">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="52" xposition="428" yposition="441" mirror="1">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="53" xposition="455" yposition="448" mirror="1">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="54" xposition="482" yposition="441" mirror="1">
+		<image name="borderBarFullB.bmp" xposition="0" yposition="0" width="24" height="23"/>
+	</static>
+	<static id="90" xposition="377" yposition="439" mirror="1">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="91" xposition="404" yposition="446" mirror="1">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="92" xposition="431" yposition="439" mirror="1">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="93" xposition="458" yposition="446" mirror="1">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<static id="94" xposition="485" yposition="439" mirror="1">
+		<image name="borderGaugeCrashB.bmp" xposition="0" yposition="0" width="30" height="28"/>
+	</static>
+	<slidervert id="110" xposition="373" yposition="442" mirror="1">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="111" xposition="400" yposition="449" mirror="1">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="112" xposition="427" yposition="442" mirror="1">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="113" xposition="454" yposition="449" mirror="1">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+	<slidervert id="114" xposition="481" yposition="442" mirror="1">
+		<image name="borderBarCrashB.bmp" xposition="0" yposition="0" width="22" height="21"/>
+	</slidervert>
+</layout>

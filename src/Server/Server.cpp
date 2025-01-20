@@ -8,8 +8,8 @@
 #include "Server.hpp"
 
 #define BUFFER_SIZE 1024
-#define CHARACTER_INPUT_DELAY 8
-#define BATTLE_INPUT_DELAY 8
+#define CHARACTER_INPUT_DELAY 30
+#define BATTLE_INPUT_DELAY 4
 
 const uint8_t versionString2v2[] = {
 	0x41, 0xD0, 0x3B, 0x30, 0x64, 0x41, 0x74, 0xC8,
@@ -464,23 +464,20 @@ void Server::_handleChrSelectInput(Server::Client &client, SokuLib::GameInputEve
 		game->event.input.inputCount = (lastFrame - packet.frameId) * 4;
 		for (int i = 0; i < game->event.input.inputCount; i += 4) {
 			for (int j = 0; j < 4; j++) {
-				auto &p = this->_state.players[j];
+				auto &p = *this->_state.slots[j];
 
-				if (p.state == SELECT_CHARACTER) {
-					auto index = p.frameIdOffset - client.state->frameIdOffset + ((lastFrame - i / 4) - (p.lastFrameId - (int)p.inputs.size()) - 1);
-
-					game->event.input.inputs[game->event.input.inputCount - 4 - i + j] = p.inputs[index];
-				} else {
+				if (p.state != SELECT_CHARACTER) {
 					game->event.input.inputs[game->event.input.inputCount - 4 - i + j].raw = 0;
-					game->event.input.inputs[game->event.input.inputCount - 4 - i + j].charSelect.A = (client.internalTimer >> 2) & 1;
-				}
+					game->event.input.inputs[game->event.input.inputCount - 4 - i + j].charSelect.Z = (client.internalTimer >> 2) & 1;
+				} else
+					game->event.input.inputs[game->event.input.inputCount - 4 - i + j] = p.getInput(lastFrame - client.state->frameIdOffset + p.frameIdOffset);
 			}
 		}
 	} else {
 		client.state->inputs.clear();
 		client.state->inputs.resize(CHARACTER_INPUT_DELAY, {.raw = 0});
-		client.state->frameIdOffset = packet.frameId + 1 + CHARACTER_INPUT_DELAY;
-		client.state->lastFrameId = client.state->frameIdOffset;
+		client.state->frameIdOffset = packet.frameId + 1;
+		client.state->lastFrameId = client.state->frameIdOffset + CHARACTER_INPUT_DELAY;
 		game->event.input.frameId = packet.frameId + 1;
 		game->event.input.inputCount = packet.inputCount * 4;
 		for (int i = 0; i < game->event.input.inputCount; i += 4) {
@@ -525,7 +522,7 @@ void Server::_handleBattleInput(Server::Client &client, SokuLib::GameInputEvent 
 	game->event.input.inputCount = (lastFrame - packet.frameId) * 4;
 	for (int i = 0; i < game->event.input.inputCount; i += 4) {
 		for (int j = 0; j < 4; j++) {
-			auto &p = this->_state.players[j];
+			auto &p = *this->_state.slots[j];
 
 			if (p.state == FIGHT || p.state == READY_TO_FIGHT) {
 				auto index = p.frameIdOffset - client.state->frameIdOffset + ((lastFrame - i / 4) - (p.lastFrameId - (int)p.inputs.size()) - 1);
@@ -623,6 +620,7 @@ void Server::_disconnect(Server::Client &client)
 	client.status = STATUS_DISCONNECTED;
 	for (size_t i = 0; i < this->_state.players.size(); i++)
 		if (&this->_state.players[i] == client.state) {
+			client.state = nullptr;
 			this->_onPlayerDisconnect(i);
 			return;
 		}
@@ -656,4 +654,13 @@ bool Server::inChrSelect() const
 bool Server::endOfFight() const
 {
 	return std::all_of(this->_state.players.begin(), this->_state.players.end(), [](const PlayerState &p){ return p.state == END_OF_FIGHT || p.state == SELECT_CHARACTER; });
+}
+
+SokuLib::Inputs Server::PlayerState::getInput(unsigned int frame)
+{
+#ifdef _DEBUG
+	return this->inputs.at(frame - this->frameIdOffset - 1);
+#else
+	return this->inputs[frame - this->frameIdOffset - 1];
+#endif
 }

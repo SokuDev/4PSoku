@@ -12,6 +12,7 @@
 #include <SokuLib.hpp>
 #include <shlwapi.h>
 #include <thread>
+#include <deque>
 #include "CustomPackets.hpp"
 
 #ifndef _DEBUG
@@ -187,6 +188,7 @@ struct RivControl {
 	bool paused;
 };
 
+static void (*og_loadDat)(const char *path);
 static unsigned char (__fastcall *og_advanceFrame)(SokuLib::CharacterManager *);
 static void (*s_originalDrawGradiantBar)(float param1, float param2, float param3);
 static int (SokuLib::SelectClient::*s_originalSelectClientOnProcess)();
@@ -393,6 +395,12 @@ static std::pair<SokuLib::PlayerInfo, SokuLib::PlayerInfo> assists = {
 	SokuLib::PlayerInfo{SokuLib::CHARACTER_MARISA, 1, 0, 0, 0, {}, &keys.second}
 };
 static std::pair<int, int> healing{-1, -1};
+
+void loadExtraDatFiles(const char *path)
+{
+	og_loadDat(path);
+	SokuLib::v2::loadDatFile((std::string(modFolder) + "/assets.dat").c_str());
+}
 
 void loadSoku2CSV(LPWSTR path)
 {
@@ -623,6 +631,7 @@ static void loadCardAssets()
 			loadTexture(cardsTextures[j][card], buffer);
 		}
 	}
+	loadTexture(baseSprite,            "data/menu/21_Base.bmp");
 	loadTexture(baseSprite,            "data/menu/21_Base.bmp");
 	loadTexture(nameSprite,            "data/profile/20_Name.bmp");
 	loadTexture(arrowSprite,           "data/profile/deck2/sayuu.bmp");
@@ -965,14 +974,28 @@ void generateFakeDecks()
 
 	std::unique_ptr<std::array<unsigned short, 20>> tmp;
 
-	generateFakeDeck(SokuLib::leftChar, lastChrs[0], selectedDecks[0], loadedDecks[0][SokuLib::leftChar], tmp);
-	convertDeckToSokuFormat(tmp, SokuLib::leftPlayerInfo.effectiveDeck);
-	generateFakeDeck(SokuLib::rightChar, lastChrs[1], selectedDecks[1], loadedDecks[1][SokuLib::rightChar], tmp);
-	convertDeckToSokuFormat(tmp, SokuLib::rightPlayerInfo.effectiveDeck);
-	generateFakeDeck(assists.first.character, lastChrs[2], chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character], tmp);
-	convertDeckToSokuFormat(tmp, assists.first.effectiveDeck);
-	generateFakeDeck(assists.second.character, lastChrs[3], chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], tmp);
-	convertDeckToSokuFormat(tmp, assists.second.effectiveDeck);
+	if (SokuLib::mainMode != SokuLib::BATTLE_MODE_VSSERVER && SokuLib::mainMode != SokuLib::BATTLE_MODE_VSCLIENT) {
+		generateFakeDeck(SokuLib::leftChar, lastChrs[0], selectedDecks[0], loadedDecks[0][SokuLib::leftChar], tmp);
+		convertDeckToSokuFormat(tmp, SokuLib::leftPlayerInfo.effectiveDeck);
+		generateFakeDeck(SokuLib::rightChar, lastChrs[1], selectedDecks[1], loadedDecks[1][SokuLib::rightChar], tmp);
+		convertDeckToSokuFormat(tmp, SokuLib::rightPlayerInfo.effectiveDeck);
+		generateFakeDeck(assists.first.character, lastChrs[2], chrSelectExtra[0].deckHandler.pos, loadedDecks[2][assists.first.character], tmp);
+		convertDeckToSokuFormat(tmp, assists.first.effectiveDeck);
+		generateFakeDeck(assists.second.character, lastChrs[3], chrSelectExtra[1].deckHandler.pos, loadedDecks[3][assists.second.character], tmp);
+		convertDeckToSokuFormat(tmp, assists.second.effectiveDeck);
+	} else if (mySlot == 0) {
+		generateFakeDeck(SokuLib::leftChar, lastChrs[0], selectedDecks[0], loadedDecks[0][SokuLib::leftChar], tmp);
+		convertDeckToSokuFormat(tmp, SokuLib::leftPlayerInfo.effectiveDeck);
+	} else if (mySlot == 1) {
+		generateFakeDeck(SokuLib::rightChar, lastChrs[1], selectedDecks[1], loadedDecks[0][SokuLib::rightChar], tmp);
+		convertDeckToSokuFormat(tmp, SokuLib::rightPlayerInfo.effectiveDeck);
+	} else if (mySlot == 2) {
+		generateFakeDeck(assists.first.character, lastChrs[2], chrSelectExtra[0].deckHandler.pos, loadedDecks[0][assists.first.character], tmp);
+		convertDeckToSokuFormat(tmp, assists.first.effectiveDeck);
+	} else if (mySlot == 3) {
+		generateFakeDeck(assists.second.character, lastChrs[3], chrSelectExtra[1].deckHandler.pos, loadedDecks[0][assists.second.character], tmp);
+		convertDeckToSokuFormat(tmp, assists.second.effectiveDeck);
+	}
 }
 
 void selectProcessCommon(SokuLib::Select *This, int ret)
@@ -1453,9 +1476,15 @@ void __fastcall CBattleManager_OnRender(SokuLib::BattleManager *This)
 	}
 }
 
-const char *effectPath = "data/infoEffect/effect2.pat";
-const char *battleUpperPath = "data/battle/battleUpper2.dat";
-const char *battleUnderPath = "data/battle/battleUnder2.dat";
+const char *characterSelectXml = "data/scene/select/character/character_4p.dat";
+const char *menuProfileXml = "data/menu/menuProfile_4p.dat";
+const char *menuSelectXml = "data/menu/select/select_4p.dat";
+const char *effectPath = "data/infoeffect/effect_4p.pat";
+const char *effectPath_invisible = "data/infoeffect/effect_4p_invis.pat";
+const char *battleUpperPath1 = "data/battle/battleUpper_4p.dat";
+const char *battleUnderPath1 = "data/battle/battleUnder_4p.dat";
+const char *battleUpperPath2 = "data/battle/battleUpper_4p_2.dat";
+const char *battleUnderPath2 = "data/battle/battleUnder_4p_2.dat";
 
 void initHud()
 {
@@ -1464,13 +1493,13 @@ void initHud()
 	::VirtualProtect((PVOID)TEXT_SECTION_OFFSET, TEXT_SECTION_SIZE, PAGE_EXECUTE_WRITECOPY, &old);
 	memset((void *)0x47E9CA, 0x90, 6);
 	puts("Construct HUD");
-	*(const char **)0x47DEC2 = effectPath;
-	*(const char **)0x47DEE5 = battleUpperPath;
-	*(const char **)0x47DEFD = battleUnderPath;
+	*(const char **)0x47DEC2 = effectPath_invisible;
+	*(const char **)0x47DEE5 = battleUpperPath2;
+	*(const char **)0x47DEFD = battleUnderPath2;
 	((void (__thiscall *)(CInfoManager *))0x47EAF0)(&hud2);
-	*(int *)0x47DEC2 = 0x85B430;
-	*(int *)0x47DEE5 = 0x85B46C;
-	*(int *)0x47DEFD = 0x85B450;
+	*(const char **)0x47DEC2 = effectPath;
+	*(const char **)0x47DEE5 = battleUpperPath1;
+	*(const char **)0x47DEFD = battleUnderPath1;
 
 	SokuLib::CharacterManager** players = (SokuLib::CharacterManager**)((int)&SokuLib::getBattleMgr() + 0xC);
 	auto p1 = players[0];
@@ -3667,8 +3696,11 @@ void onMenuTopProfileInit()
 {
 	((SokuLib::CDesign *)0x89A68C)->getById(&profileHandlers[0], 102);
 	((SokuLib::CDesign *)0x89A68C)->getById(&profileHandlers[1], 103);
-	profileHandlers[0]->active = true;
-	profileHandlers[1]->active = true;
+	if (profileHandlers[0] && profileHandlers[1]) {
+		profileHandlers[0]->active = true;
+		profileHandlers[1]->active = true;
+	} else
+		MessageBoxA(SokuLib::window, "The assets for 4PSoku are not found or corrupted. The game will launch in an unstable state.", "4PSoku error", MB_ICONERROR);
 }
 
 void renderExtraProfilesTop()
@@ -3695,9 +3727,13 @@ void __declspec(naked) selectProfileSpriteColor()
 void chrSelect_pushActiveInputs()
 {
 	SokuLib::Select *This;
-	auto unkSTL_push = (void (__thiscall *)(void *, void *))0x44BFE0;
+	auto unkSTL_push = (void (__thiscall *)(void *, SokuLib::KeymapManager **))0x44BFE0;
 
 	__asm MOV This, ESI;
+	if (SokuLib::mainMode == SokuLib::BATTLE_MODE_VSSERVER) {
+		chrSelectExtra[0].input = &extraOnlineInputs[0];
+		chrSelectExtra[1].input = &extraOnlineInputs[1];
+	}
 	if (chrSelectExtra[0].input)
 		unkSTL_push(&This->offset_0x018[0x60], &chrSelectExtra[0].input);
 	if (chrSelectExtra[1].input)
@@ -4237,12 +4273,7 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	*(char *)0x44CFEE = 0x50;
 	SokuLib::TamperNearCall(0x44CFD8, selectProfileSpriteColor);
 
-	// Filesystem first patch
-	*(char *)0x40D1FB = 0xEB;
-	*(char *)0x40D27A = 0x74;
-	*(char *)0x40D27B = 0x91;
-	*(char *)0x40D245 = 0x1C;
-	memset((char *)0x40D27C, 0x90, 7);
+	og_loadDat = SokuLib::TamperNearJmpOpr(0x7fb85f, loadExtraDatFiles);
 
 	// Chr select input stuff
 	SokuLib::TamperNearCall(0x43E6C8, checkUsedInputs);
@@ -4463,6 +4494,14 @@ extern "C" __declspec(dllexport) bool Initialize(HMODULE hMyModule, HMODULE hPar
 	*(unsigned short *)0x454CD6 = 0b101111111111;
 	*(unsigned short *)0x454CC2 = 0b101111111111;
 
+	// Different asset paths
+	*(const char **)0x47DC8E = effectPath;
+	*(const char **)0x47DEC2 = effectPath;
+	*(const char **)0x47DEE5 = battleUpperPath1;
+	*(const char **)0x47DEFD = battleUnderPath1;
+	*(const char **)0x444294 = menuProfileXml;
+	*(const char **)0x44D1FA = menuSelectXml;
+	*(const char **)0x4248CB = characterSelectXml;
 
 	og_handleInputs = SokuLib::TamperNearJmpOpr(0x48224D, handlePlayerInputs);
 	s_origLoadDeckData = SokuLib::TamperNearJmpOpr(0x437D23, loadDeckData);
